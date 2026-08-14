@@ -254,18 +254,24 @@
   {% if report_rows %}
   const STATUS_COLOURS = {{ status_colours | tojson }};
 
-  // Bar — hours per agent
+  function fmtMins(m) {
+    if (!m && m !== 0) return '0m';
+    const h = Math.floor(m / 60), rem = m % 60;
+    return h > 0 ? `${h}h ${String(rem).padStart(2,'0')}m` : `${rem}m`;
+  }
+
+  // Bar — hours per agent (store raw minutes, format on display)
   (function() {
-    const raw   = {{ weekly | tojson }};
+    const raw    = {{ weekly | tojson }};
     const labels = Object.keys(raw).sort((a,b) => raw[b]-raw[a]);
-    const hours  = labels.map(k => +(raw[k]/60).toFixed(1));
+    const mins   = labels.map(k => raw[k]);
     new Chart(document.getElementById('chart-hours'), {
       type: 'bar',
       data: {
         labels,
         datasets: [{
-          label: 'Hours',
-          data: hours,
+          label: 'Time',
+          data: mins,
           backgroundColor: 'rgba(41,128,185,0.75)',
           borderColor: 'rgba(41,128,185,1)',
           borderWidth: 1,
@@ -276,27 +282,33 @@
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${fmtMins(ctx.parsed.x)}` } },
+        },
         scales: {
-          x: { grid: { color: '#f0f3f6' }, ticks: { font: { size: 11 } } },
+          x: {
+            grid: { color: '#f0f3f6' },
+            ticks: { font: { size: 11 }, callback: v => fmtMins(v) },
+          },
           y: { grid: { display: false }, ticks: { font: { size: 11 } } },
         }
       }
     });
   })();
 
-  // Donut — status breakdown
+  // Donut — status breakdown (store raw minutes)
   (function() {
-    const raw    = {{ chart_statuses | tojson }};
-    const labels = Object.keys(raw);
-    const hours  = labels.map(k => +(raw[k]/60).toFixed(1));
+    const raw     = {{ chart_statuses | tojson }};
+    const labels  = Object.keys(raw);
+    const mins    = labels.map(k => raw[k]);
     const colours = labels.map(k => STATUS_COLOURS[k] || '#95a5a6');
     new Chart(document.getElementById('chart-status'), {
       type: 'doughnut',
       data: {
         labels,
         datasets: [{
-          data: hours,
+          data: mins,
           backgroundColor: colours,
           borderWidth: 2,
           borderColor: '#fff',
@@ -307,25 +319,25 @@
         maintainAspectRatio: false,
         plugins: {
           legend: { position: 'right', labels: { font: { size: 11 }, padding: 12 } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}h` } }
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmtMins(ctx.parsed)}` } },
         }
       }
     });
   })();
 
   {% if chart_daily|length > 1 %}
-  // Line — daily hours
+  // Line — daily hours (store raw minutes)
   (function() {
     const raw    = {{ chart_daily | tojson }};
     const labels = Object.keys(raw).map(d => { const [,m,day]=d.split('-'); return `${day}/${m}`; });
-    const hours  = Object.values(raw).map(m => +(m/60).toFixed(1));
+    const mins   = Object.values(raw);
     new Chart(document.getElementById('chart-daily'), {
       type: 'line',
       data: {
         labels,
         datasets: [{
-          label: 'Hours',
-          data: hours,
+          label: 'Time',
+          data: mins,
           borderColor: 'rgba(41,128,185,1)',
           backgroundColor: 'rgba(41,128,185,0.08)',
           borderWidth: 2,
@@ -338,10 +350,17 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${fmtMins(ctx.parsed.y)}` } },
+        },
         scales: {
           x: { grid: { color: '#f0f3f6' }, ticks: { font: { size: 11 } } },
-          y: { grid: { color: '#f0f3f6' }, ticks: { font: { size: 11 } }, beginAtZero: true },
+          y: {
+            grid: { color: '#f0f3f6' },
+            ticks: { font: { size: 11 }, callback: v => fmtMins(v) },
+            beginAtZero: true,
+          },
         }
       }
     });

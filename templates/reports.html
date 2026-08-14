@@ -182,10 +182,12 @@
             <td>{{ row.clock_in|fmt_time }}</td>
             <td>{{ row.clock_out|fmt_time }}</td>
             <td>
-              {% if row.total_minutes %}
+              {% if row.in_progress %}
+                <span class="text-muted">In progress</span>
+              {% elif row.total_minutes %}
                 <strong>{{ row.total_minutes|fmt_mins }}</strong>
               {% else %}
-                <span class="text-muted">In progress</span>
+                <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td>

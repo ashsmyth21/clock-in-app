@@ -624,34 +624,62 @@ def reports():
     query += ' ORDER BY s.clock_in DESC'
     rows = db.execute(query, params).fetchall()
 
-    report_rows = []
-    weekly = {}
-    chart_statuses = {}
-    chart_daily = {}
-
+    # Group sessions by (username, date) so one row = one agent-day
+    groups = {}
     for row in rows:
         evts = db.execute(
             'SELECT status, timestamp FROM status_events WHERE session_id = ? ORDER BY timestamp',
             (row['id'],)
         ).fetchall()
         bd = _status_breakdown(evts, row['clock_out'])
-        mins = row['total_minutes'] or 0
-        report_rows.append({
-            'username': row['username'],
-            'team': row['team'],
-            'clock_in': row['clock_in'],
-            'clock_out': row['clock_out'],
-            'total_minutes': mins,
-            'breakdown': bd,
-        })
-        weekly[row['username']] = weekly.get(row['username'], 0) + mins
+        key = (row['username'], row['clock_in'][:10] if row['clock_in'] else '')
+        if key not in groups:
+            groups[key] = {
+                'username': row['username'],
+                'team': row['team'],
+                'clock_ins': [],
+                'clock_outs': [],
+                'total_minutes': 0,
+                'breakdown': {},
+                'has_open': False,
+            }
+        g = groups[key]
+        if row['clock_in']:
+            g['clock_ins'].append(row['clock_in'])
+        if row['clock_out']:
+            g['clock_outs'].append(row['clock_out'])
+        else:
+            g['has_open'] = True
+        g['total_minutes'] += row['total_minutes'] or 0
         for s, m in bd.items():
+            g['breakdown'][s] = g['breakdown'].get(s, 0) + m
+
+    report_rows = []
+    weekly = {}
+    chart_statuses = {}
+    chart_daily = {}
+
+    for (username, date_key), g in groups.items():
+        clock_in  = min(g['clock_ins'])  if g['clock_ins']  else None
+        clock_out = max(g['clock_outs']) if g['clock_outs'] and not g['has_open'] else None
+        mins = g['total_minutes']
+        report_rows.append({
+            'username':      username,
+            'team':          g['team'],
+            'clock_in':      clock_in,
+            'clock_out':     clock_out,
+            'total_minutes': mins,
+            'in_progress':   g['has_open'],
+            'breakdown':     g['breakdown'],
+        })
+        weekly[username] = weekly.get(username, 0) + mins
+        for s, m in g['breakdown'].items():
             if m > 0:
                 chart_statuses[s] = chart_statuses.get(s, 0) + m
-        if row['clock_in']:
-            d = row['clock_in'][:10]
-            chart_daily[d] = chart_daily.get(d, 0) + mins
+        if date_key:
+            chart_daily[date_key] = chart_daily.get(date_key, 0) + mins
 
+    report_rows.sort(key=lambda r: r['clock_in'] or '', reverse=True)
     chart_daily = dict(sorted(chart_daily.items()))
     total_hours = sum(weekly.values()) / 60
     avg_hours   = total_hours / len(weekly) if weekly else 0

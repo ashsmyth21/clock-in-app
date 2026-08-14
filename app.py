@@ -591,18 +591,33 @@ def reassign_team(uid):
 @manager_required
 def reports():
     db = get_db()
-    users = db.execute('SELECT id, username FROM users ORDER BY username').fetchall()
-
     date_from = request.args.get('date_from', (date.today() - timedelta(days=7)).isoformat())
-    date_to = request.args.get('date_to', date.today().isoformat())
+    date_to   = request.args.get('date_to',   date.today().isoformat())
     user_filter = request.args.get('user_id', '')
+    team_filter = request.args.get('team', '')
+
+    if current_user.role == 'admin':
+        users = db.execute(
+            "SELECT id, username, team FROM users WHERE role = 'agent' ORDER BY team, username"
+        ).fetchall()
+    else:
+        users = db.execute(
+            "SELECT id, username, team FROM users WHERE role = 'agent' AND team = ? ORDER BY username",
+            (current_user.team,)
+        ).fetchall()
 
     query = (
-        'SELECT s.id, u.username, s.clock_in, s.clock_out, s.total_minutes'
-        ' FROM sessions s JOIN users u ON u.id = s.user_id'
-        ' WHERE date(s.clock_in) BETWEEN ? AND ?'
+        "SELECT s.id, u.username, u.team, s.clock_in, s.clock_out, s.total_minutes"
+        " FROM sessions s JOIN users u ON u.id = s.user_id"
+        " WHERE date(s.clock_in) BETWEEN ? AND ? AND u.role = 'agent'"
     )
     params = [date_from, date_to]
+    if team_filter:
+        query += ' AND u.team = ?'
+        params.append(team_filter)
+    elif current_user.role == 'manager':
+        query += ' AND u.team = ?'
+        params.append(current_user.team)
     if user_filter:
         query += ' AND s.user_id = ?'
         params.append(user_filter)
@@ -611,26 +626,44 @@ def reports():
 
     report_rows = []
     weekly = {}
+    chart_statuses = {}
+    chart_daily = {}
+
     for row in rows:
         evts = db.execute(
             'SELECT status, timestamp FROM status_events WHERE session_id = ? ORDER BY timestamp',
             (row['id'],)
         ).fetchall()
         bd = _status_breakdown(evts, row['clock_out'])
+        mins = row['total_minutes'] or 0
         report_rows.append({
             'username': row['username'],
+            'team': row['team'],
             'clock_in': row['clock_in'],
             'clock_out': row['clock_out'],
-            'total_minutes': row['total_minutes'],
+            'total_minutes': mins,
             'breakdown': bd,
         })
-        key = row['username']
-        weekly[key] = weekly.get(key, 0) + (row['total_minutes'] or 0)
+        weekly[row['username']] = weekly.get(row['username'], 0) + mins
+        for s, m in bd.items():
+            if m > 0:
+                chart_statuses[s] = chart_statuses.get(s, 0) + m
+        if row['clock_in']:
+            d = row['clock_in'][:10]
+            chart_daily[d] = chart_daily.get(d, 0) + mins
+
+    chart_daily = dict(sorted(chart_daily.items()))
+    total_hours = sum(weekly.values()) / 60
+    avg_hours   = total_hours / len(weekly) if weekly else 0
 
     return render_template('reports.html',
                            users=users, report_rows=report_rows, weekly=weekly,
-                           date_from=date_from, date_to=date_to, user_filter=user_filter,
-                           statuses_list=STATUSES)
+                           date_from=date_from, date_to=date_to,
+                           user_filter=user_filter, team_filter=team_filter,
+                           statuses_list=STATUSES,
+                           chart_statuses=chart_statuses, chart_daily=chart_daily,
+                           total_shifts=len(report_rows),
+                           total_hours=total_hours, avg_hours=avg_hours)
 
 
 @app.route('/manager/reports/export')
@@ -638,16 +671,23 @@ def reports():
 @manager_required
 def export_csv():
     db = get_db()
-    date_from = request.args.get('date_from', (date.today() - timedelta(days=7)).isoformat())
-    date_to = request.args.get('date_to', date.today().isoformat())
+    date_from   = request.args.get('date_from', (date.today() - timedelta(days=7)).isoformat())
+    date_to     = request.args.get('date_to',   date.today().isoformat())
     user_filter = request.args.get('user_id', '')
+    team_filter = request.args.get('team', '')
 
     query = (
-        'SELECT s.id, u.username, s.clock_in, s.clock_out, s.total_minutes'
-        ' FROM sessions s JOIN users u ON u.id = s.user_id'
-        ' WHERE date(s.clock_in) BETWEEN ? AND ?'
+        "SELECT s.id, u.username, u.team, s.clock_in, s.clock_out, s.total_minutes"
+        " FROM sessions s JOIN users u ON u.id = s.user_id"
+        " WHERE date(s.clock_in) BETWEEN ? AND ? AND u.role = 'agent'"
     )
     params = [date_from, date_to]
+    if team_filter:
+        query += ' AND u.team = ?'
+        params.append(team_filter)
+    elif current_user.role == 'manager':
+        query += ' AND u.team = ?'
+        params.append(current_user.team)
     if user_filter:
         query += ' AND s.user_id = ?'
         params.append(user_filter)

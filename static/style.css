@@ -720,6 +720,25 @@ tbody tr:hover { background: #f8fafc; }
 
 .status-tile.active .tile-label { color: rgba(255,255,255,0.85); }
 
+/* ── Preset date buttons ─────────────────────────────────────────────────── */
+.preset-btn {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-light);
+}
+
 /* ── Team filter bar ─────────────────────────────────────────────────────── */
 .team-filter-bar {
   display: flex;

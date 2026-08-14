@@ -72,6 +72,7 @@
       <div class="agent-card-top" style="background:{{ colour }};"></div>
       <div class="agent-card-body">
         <div class="agent-name">{{ agent.username }}</div>
+        <div class="agent-team">{{ agent.team or '—' }}</div>
         <div class="agent-role-chip">{{ agent.role }}</div>
         <div class="agent-status-row">
           <span class="status-badge status-{{ css_status }}">{{ agent.status }}</span>
@@ -158,6 +159,7 @@
         <div class="agent-card-top" style="background:${colour};"></div>
         <div class="agent-card-body">
           <div class="agent-name">${agent.username}</div>
+          <div class="agent-team">${agent.team || '—'}</div>
           <div class="agent-role-chip">${agent.role}</div>
           <div class="agent-status-row">
             <span class="status-badge status-${cssStatus}">${agent.status}</span>

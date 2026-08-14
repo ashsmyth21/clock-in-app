@@ -5,11 +5,28 @@
 <div class="page-header">
   <div>
     <div class="page-title">User Management</div>
-    <div class="page-sub">Add agents, reset passwords, manage accounts</div>
+    <div class="page-sub">
+      {% if current_user.role == 'admin' %}
+        Manage managers and agents across all teams
+      {% else %}
+        Manage agents
+      {% endif %}
+    </div>
   </div>
-  <button class="btn btn-primary" onclick="document.getElementById('add-user-modal').classList.add('open')">
-    + Add User
-  </button>
+  <div style="display:flex;gap:8px;">
+    {% if current_user.role == 'admin' %}
+      <button class="btn btn-secondary" onclick="document.getElementById('add-manager-modal').classList.add('open')">
+        + Add Manager
+      </button>
+      <button class="btn btn-primary" onclick="document.getElementById('add-agent-modal').classList.add('open')">
+        + Add Agent
+      </button>
+    {% else %}
+      <button class="btn btn-primary" onclick="document.getElementById('add-agent-modal').classList.add('open')">
+        + Add Agent
+      </button>
+    {% endif %}
+  </div>
 </div>
 
 <div class="card">
@@ -18,7 +35,8 @@
       <thead>
         <tr>
           <th>Username</th>
-          <th>Role</th>
+          {% if current_user.role == 'admin' %}<th>Role</th>{% endif %}
+          <th>Team</th>
           <th>Status</th>
           <th>Password</th>
           <th>Actions</th>
@@ -28,12 +46,21 @@
         {% for user in users %}
         <tr style="{% if not user.is_active %}opacity:0.55;{% endif %}">
           <td><strong>{{ user.username }}</strong></td>
+          {% if current_user.role == 'admin' %}
           <td>
             <span class="badge-role {% if user.role == 'manager' %}manager{% endif %}"
                   style="background:{% if user.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
                          color:{% if user.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
               {{ user.role }}
             </span>
+          </td>
+          {% endif %}
+          <td>
+            {% if user.team %}
+              <span style="font-size:12.5px;">{{ user.team }}</span>
+            {% else %}
+              <span style="font-size:12px;color:var(--text-muted);">—</span>
+            {% endif %}
           </td>
           <td>
             {% if user.is_active %}
@@ -44,24 +71,51 @@
           </td>
           <td>
             {% if user.force_password_change %}
-              <span style="font-size:12px;color:var(--s-lunch);font-weight:600;">⚠ Must change</span>
+              <span style="font-size:12px;color:var(--s-lunch);font-weight:600;">Must change</span>
             {% else %}
               <span style="font-size:12px;color:var(--text-muted);">Set</span>
             {% endif %}
           </td>
           <td>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button class="btn btn-sm btn-secondary"
-                      onclick="openResetModal({{ user.id }}, '{{ user.username }}')">
-                Reset Password
-              </button>
-              {% if user.id != current_user.id %}
-                <form method="POST" action="{{ url_for('toggle_active', uid=user.id) }}"
-                      onsubmit="return confirm('{{ 'Deactivate' if user.is_active else 'Reactivate' }} {{ user.username }}?')">
-                  <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-success{% endif %}">
-                    {{ 'Deactivate' if user.is_active else 'Reactivate' }}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              {% if current_user.role == 'admin' or user.team == current_user.team %}
+                {# Admin can reset anyone; manager can reset agents in their own team #}
+                <button class="btn btn-sm btn-secondary"
+                        onclick="openResetModal({{ user.id }}, '{{ user.username }}')">
+                  Reset Password
+                </button>
+              {% endif %}
+
+              {# Reassign team — admin always; manager only for agents not in their team (move to my team) #}
+              {% if current_user.role == 'admin' %}
+                <form method="POST" action="{{ url_for('reassign_team', uid=user.id) }}"
+                      style="display:flex;gap:4px;align-items:center;">
+                  <select name="team" style="width:auto;padding:4px 8px;font-size:12px;">
+                    {% for t in teams %}
+                      <option value="{{ t }}" {% if t == user.team %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-secondary">Move</button>
+                </form>
+              {% elif user.team != current_user.team %}
+                <form method="POST" action="{{ url_for('reassign_team', uid=user.id) }}">
+                  <input type="hidden" name="team" value="{{ current_user.team }}">
+                  <button type="submit" class="btn btn-sm btn-secondary"
+                          onclick="return confirm('Move {{ user.username }} to your team ({{ current_user.team }})?')">
+                    Move to My Team
                   </button>
                 </form>
+              {% endif %}
+
+              {% if user.id != current_user.id %}
+                {% if current_user.role == 'admin' or user.team == current_user.team %}
+                  <form method="POST" action="{{ url_for('toggle_active', uid=user.id) }}"
+                        onsubmit="return confirm('{{ 'Deactivate' if user.is_active else 'Reactivate' }} {{ user.username }}?')">
+                    <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-success{% endif %}">
+                      {{ 'Deactivate' if user.is_active else 'Reactivate' }}
+                    </button>
+                  </form>
+                {% endif %}
               {% endif %}
             </div>
           </td>
@@ -72,42 +126,94 @@
   </div>
 </div>
 
-<!-- Add User Modal -->
-<div class="modal-overlay" id="add-user-modal">
+{# ── Add Agent Modal ── #}
+<div class="modal-overlay" id="add-agent-modal">
   <div class="modal-box">
-    <div class="modal-title">Add New User</div>
+    <div class="modal-title">Add New Agent</div>
     <form method="POST" action="{{ url_for('add_user') }}">
+      <input type="hidden" name="role" value="agent">
       <div class="form-group">
-        <label for="new-username">Username</label>
-        <input type="text" id="new-username" name="username" required placeholder="e.g. jane.smith">
+        <label for="agent-username">Username</label>
+        <input type="text" id="agent-username" name="username" required placeholder="e.g. jane.smith">
       </div>
       <div class="form-group">
-        <label for="new-password">Temporary Password</label>
-        <input type="password" id="new-password" name="password" required
+        <label for="agent-password">Temporary Password</label>
+        <input type="password" id="agent-password" name="password" required
+               placeholder="At least 8 characters" minlength="8">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+          The user will be required to set a new password on first login.
+        </div>
+      </div>
+      {% if current_user.role == 'admin' %}
+      <div class="form-group">
+        <label for="agent-team">Team</label>
+        <select id="agent-team" name="team" required>
+          <option value="">— Select team —</option>
+          {% for t in teams %}
+            <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <div class="form-group">
+        <label>Team</label>
+        <div style="padding:8px 12px;background:#f5f7fa;border-radius:7px;font-size:13.5px;border:1.5px solid var(--border);">
+          {{ current_user.team or 'No Team' }}
+        </div>
+      </div>
+      {% endif %}
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+                onclick="document.getElementById('add-agent-modal').classList.remove('open')">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">Create Agent</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Add Manager Modal (admin only) ── #}
+{% if current_user.role == 'admin' %}
+<div class="modal-overlay" id="add-manager-modal">
+  <div class="modal-box">
+    <div class="modal-title">Add New Manager</div>
+    <form method="POST" action="{{ url_for('add_user') }}">
+      <input type="hidden" name="role" value="manager">
+      <div class="form-group">
+        <label for="mgr-username">Username</label>
+        <input type="text" id="mgr-username" name="username" required placeholder="e.g. john.smith">
+      </div>
+      <div class="form-group">
+        <label for="mgr-password">Temporary Password</label>
+        <input type="password" id="mgr-password" name="password" required
                placeholder="At least 8 characters" minlength="8">
         <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
           The user will be required to set a new password on first login.
         </div>
       </div>
       <div class="form-group">
-        <label for="new-role">Role</label>
-        <select id="new-role" name="role">
-          <option value="agent">Agent</option>
-          <option value="manager">Manager</option>
+        <label for="mgr-team">Team</label>
+        <select id="mgr-team" name="team" required>
+          <option value="">— Select team —</option>
+          {% for t in teams %}
+            <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary"
-                onclick="document.getElementById('add-user-modal').classList.remove('open')">
+                onclick="document.getElementById('add-manager-modal').classList.remove('open')">
           Cancel
         </button>
-        <button type="submit" class="btn btn-primary">Create User</button>
+        <button type="submit" class="btn btn-primary">Create Manager</button>
       </div>
     </form>
   </div>
 </div>
+{% endif %}
 
-<!-- Reset Password Modal -->
+{# ── Reset Password Modal ── #}
 <div class="modal-overlay" id="reset-pw-modal">
   <div class="modal-box">
     <div class="modal-title">Reset Password for <span id="reset-username-label"></span></div>

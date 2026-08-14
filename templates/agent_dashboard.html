@@ -5,7 +5,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">My Dashboard</div>
-    <div class="page-sub">Welcome back, {{ current_user.username }}</div>
+    <div class="page-sub">{{ current_user.team or 'No Team' }} &rsaquo; {{ current_user.username }}</div>
   </div>
   <div id="live-clock" style="font-size:22px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;"></div>
 </div>
@@ -118,7 +118,7 @@
               <td>
                 <div class="breakdown-list">
                   {% for s, mins in h.breakdown.items() %}
-                    {% if mins > 0 %}
+                    {% if mins >= 0 %}
                       <span class="bd-chip" style="background:{{ status_colours.get(s, '#95a5a6') }};"
                             title="{{ s }}">
                         {{ s[:3] }} {{ mins|fmt_mins }}

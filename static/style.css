@@ -401,6 +401,12 @@ tbody tr:hover { background: #f8fafc; }
   margin-bottom: 6px;
 }
 
+.agent-team {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
 .agent-role-chip {
   display: inline-block;
   font-size: 11px;

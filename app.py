@@ -40,6 +40,7 @@ login_manager.login_message = 'Please log in to continue.'
 login_manager.login_message_category = 'info'
 
 STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting']
+TEAMS = ['Support', 'Onboarding', 'Risk', 'Credit Control', '2nd Line']
 
 STATUS_COLOURS = {
     'Available':     '#27ae60',
@@ -60,6 +61,7 @@ class User(UserMixin):
         self.role = row['role']
         self._is_active = bool(row['is_active'])
         self.force_password_change = bool(row['force_password_change'])
+        self.team = row['team'] if row['team'] else None
 
     # UserMixin.is_active is a @property — must override it, not assign to it
     @property
@@ -81,8 +83,18 @@ def load_user(user_id):
 def manager_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'manager':
+        if not current_user.is_authenticated or current_user.role not in ('manager', 'admin'):
             flash('Manager access required.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'admin':
+            flash('Admin access required.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated
@@ -94,6 +106,8 @@ def manager_required(f):
 def fmt_mins(mins):
     if mins is None:
         return '–'
+    if mins == 0:
+        return '< 1m'
     h, m = divmod(int(mins), 60)
     return f'{h}h {m:02d}m' if h else f'{m}m'
 
@@ -122,7 +136,7 @@ def fmt_date(s):
 
 @app.context_processor
 def inject_globals():
-    return {'status_colours': STATUS_COLOURS, 'statuses': STATUSES}
+    return {'status_colours': STATUS_COLOURS, 'statuses': STATUSES, 'teams': TEAMS}
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -184,7 +198,7 @@ def index():
         return redirect(url_for('login'))
     if current_user.force_password_change:
         return redirect(url_for('change_password'))
-    return redirect(url_for('manager_dashboard' if current_user.role == 'manager' else 'agent_dashboard'))
+    return redirect(url_for('manager_dashboard' if current_user.role in ('manager', 'admin') else 'agent_dashboard'))
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -358,9 +372,14 @@ def manager_dashboard():
     if current_user.force_password_change:
         return redirect(url_for('change_password'))
     db = get_db()
-    agents = db.execute(
-        'SELECT id, username, role FROM users WHERE is_active = 1 AND role = "agent" ORDER BY username'
-    ).fetchall()
+    if current_user.role == 'admin':
+        agents = db.execute(
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role != 'admin' ORDER BY username"
+        ).fetchall()
+    else:
+        agents = db.execute(
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role = 'agent' ORDER BY username"
+        ).fetchall()
 
     live = []
     for agent in agents:
@@ -375,6 +394,7 @@ def manager_dashboard():
             live.append({
                 'username': agent['username'],
                 'role': agent['role'],
+                'team': agent['team'],
                 'status': status,
                 'mins_in_status': mins_status,
                 'mins_on_shift': mins_shift,
@@ -385,6 +405,7 @@ def manager_dashboard():
             live.append({
                 'username': agent['username'],
                 'role': agent['role'],
+                'team': agent['team'],
                 'status': 'Clocked Out',
                 'mins_in_status': 0,
                 'mins_on_shift': 0,
@@ -403,9 +424,14 @@ def manager_dashboard():
 @manager_required
 def api_live_status():
     db = get_db()
-    agents = db.execute(
-        'SELECT id, username, role FROM users WHERE is_active = 1 AND role = "agent" ORDER BY username'
-    ).fetchall()
+    if current_user.role == 'admin':
+        agents = db.execute(
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role != 'admin' ORDER BY username"
+        ).fetchall()
+    else:
+        agents = db.execute(
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role = 'agent' ORDER BY username"
+        ).fetchall()
     result = []
     for agent in agents:
         sess = _open_session(db, agent['id'])
@@ -417,14 +443,14 @@ def api_live_status():
             mins_status = max(0, int((now - datetime.fromisoformat(status_ts)).total_seconds() / 60))
             mins_shift = max(0, int((now - datetime.fromisoformat(sess['clock_in'])).total_seconds() / 60))
             result.append({
-                'username': agent['username'], 'role': agent['role'],
+                'username': agent['username'], 'role': agent['role'], 'team': agent['team'],
                 'status': status, 'mins_in_status': mins_status,
                 'mins_on_shift': mins_shift, 'clocked_in': True,
                 'clock_in': sess['clock_in'],
             })
         else:
             result.append({
-                'username': agent['username'], 'role': agent['role'],
+                'username': agent['username'], 'role': agent['role'], 'team': agent['team'],
                 'status': 'Clocked Out', 'mins_in_status': 0,
                 'mins_on_shift': 0, 'clocked_in': False, 'clock_in': None,
             })
@@ -438,9 +464,14 @@ def api_live_status():
 @manager_required
 def user_management():
     db = get_db()
-    users = db.execute(
-        'SELECT id, username, role, is_active, force_password_change FROM users ORDER BY username'
-    ).fetchall()
+    if current_user.role == 'admin':
+        users = db.execute(
+            "SELECT id, username, role, team, is_active, force_password_change FROM users WHERE role != 'admin' ORDER BY role, username"
+        ).fetchall()
+    else:
+        users = db.execute(
+            "SELECT id, username, role, team, is_active, force_password_change FROM users WHERE role = 'agent' ORDER BY username"
+        ).fetchall()
     return render_template('user_management.html', users=users)
 
 
@@ -451,10 +482,23 @@ def add_user():
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
     role = request.form.get('role', 'agent')
-    if role not in ('agent', 'manager'):
+    team = request.form.get('team', '').strip()
+
+    if current_user.role == 'manager':
         role = 'agent'
-    if not username or not password:
-        flash('Username and password are required.', 'danger')
+        team = current_user.team
+    elif current_user.role == 'admin':
+        if role not in ('manager', 'agent'):
+            role = 'agent'
+        if team not in TEAMS:
+            flash('Please select a valid team.', 'danger')
+            return redirect(url_for('user_management'))
+
+    if not username:
+        flash('Username is required.', 'danger')
+        return redirect(url_for('user_management'))
+    if not password:
+        flash('Password is required.', 'danger')
         return redirect(url_for('user_management'))
     if len(password) < 8:
         flash('Password must be at least 8 characters.', 'danger')
@@ -465,9 +509,9 @@ def add_user():
         return redirect(url_for('user_management'))
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     db.execute(
-        'INSERT INTO users (username, password_hash, role, is_active, force_password_change)'
-        ' VALUES (?, ?, ?, 1, 1)',
-        (username, hashed, role)
+        'INSERT INTO users (username, password_hash, role, team, is_active, force_password_change)'
+        ' VALUES (?, ?, ?, ?, 1, 1)',
+        (username, hashed, role, team)
     )
     db.commit()
     flash(f'User "{username}" created. They will be prompted to set a password on first login.', 'success')
@@ -478,6 +522,11 @@ def add_user():
 @login_required
 @manager_required
 def reset_password(uid):
+    if current_user.role == 'manager':
+        target = get_db().execute("SELECT role FROM users WHERE id = ?", (uid,)).fetchone()
+        if not target or target['role'] != 'agent':
+            flash('Managers can only reset passwords for agents.', 'danger')
+            return redirect(url_for('user_management'))
     new_pw = request.form.get('new_password', '')
     if len(new_pw) < 8:
         flash('Password must be at least 8 characters.', 'danger')
@@ -500,6 +549,11 @@ def toggle_active(uid):
         flash('You cannot deactivate your own account.', 'danger')
         return redirect(url_for('user_management'))
     db = get_db()
+    if current_user.role == 'manager':
+        target = db.execute("SELECT role FROM users WHERE id = ?", (uid,)).fetchone()
+        if not target or target['role'] != 'agent':
+            flash('Managers can only deactivate agents.', 'danger')
+            return redirect(url_for('user_management'))
     row = db.execute('SELECT is_active FROM users WHERE id = ?', (uid,)).fetchone()
     if row:
         new_state = 0 if row['is_active'] else 1
@@ -507,6 +561,28 @@ def toggle_active(uid):
         db.commit()
         action = 'reactivated' if new_state else 'deactivated'
         flash(f'User {action}.', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/manager/users/<int:uid>/reassign-team', methods=['POST'])
+@login_required
+@manager_required
+def reassign_team(uid):
+    new_team = request.form.get('team')
+    if new_team not in TEAMS:
+        flash('Invalid team.', 'danger')
+        return redirect(url_for('user_management'))
+    db = get_db()
+    row = db.execute('SELECT role, username FROM users WHERE id = ?', (uid,)).fetchone()
+    if not row:
+        flash('User not found.', 'danger')
+        return redirect(url_for('user_management'))
+    if current_user.role == 'manager' and row['role'] != 'agent':
+        flash('Managers can only reassign agents.', 'danger')
+        return redirect(url_for('user_management'))
+    db.execute('UPDATE users SET team = ? WHERE id = ?', (new_team, uid))
+    db.commit()
+    flash(f'Team updated for {row["username"]}.', 'success')
     return redirect(url_for('user_management'))
 
 

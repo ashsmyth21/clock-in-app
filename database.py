@@ -39,6 +39,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'agent',
+            team TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
             force_password_change INTEGER NOT NULL DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
@@ -63,13 +64,17 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_status_session ON status_events(session_id);
     ''')
+    cols = [row[1] for row in db.execute('PRAGMA table_info(users)').fetchall()]
+    if 'team' not in cols:
+        db.execute('ALTER TABLE users ADD COLUMN team TEXT')
+    db.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND role = 'manager'")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:
         hashed = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
         db.execute(
             'INSERT INTO users (username, password_hash, role, is_active, force_password_change)'
             ' VALUES (?, ?, ?, 1, 1)',
-            ('admin', hashed, 'manager')
+            ('admin', hashed, 'admin')
         )
     db.commit()
     db.close()

@@ -19,7 +19,7 @@
 
   {% if current_user.is_authenticated %}
   <ul class="navbar-nav">
-    {% if current_user.role == 'manager' %}
+    {% if current_user.role in ('manager', 'admin') %}
       <li><a href="{{ url_for('manager_dashboard') }}" class="{% if request.endpoint == 'manager_dashboard' %}active{% endif %}">Dashboard</a></li>
       <li><a href="{{ url_for('user_management') }}" class="{% if request.endpoint == 'user_management' %}active{% endif %}">Users</a></li>
       <li><a href="{{ url_for('reports') }}" class="{% if request.endpoint == 'reports' %}active{% endif %}">Reports</a></li>
@@ -30,7 +30,7 @@
 
   <div class="navbar-right">
     <span class="navbar-user">{{ current_user.username }}</span>
-    <span class="badge-role {% if current_user.role == 'manager' %}manager{% endif %}">{{ current_user.role }}</span>
+    <span class="badge-role {% if current_user.role in ('manager', 'admin') %}manager{% endif %}">{{ current_user.role }}</span>
     <a href="{{ url_for('logout') }}" class="btn-nav">Sign out</a>
   </div>
   {% endif %}

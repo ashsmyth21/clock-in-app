@@ -114,11 +114,13 @@
       <div class="modal-title">Add New User</div>
       <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Select a user type to continue.</p>
       <div class="role-select-grid">
+        {% if current_user.role == 'admin' %}
         <button type="button" class="role-card" onclick="selectRole('admin')">
           <div class="role-card-icon" style="background:#c0392b;">🔑</div>
           <div class="role-card-name">Admin</div>
           <div class="role-card-desc">Full system access, manage all users</div>
         </button>
+        {% endif %}
         <button type="button" class="role-card" onclick="selectRole('manager')">
           <div class="role-card-icon" style="background:#856404;">👥</div>
           <div class="role-card-name">Manager</div>
@@ -213,13 +215,8 @@
 
   function openAddModal() {
     document.getElementById('add-user-modal').classList.add('open');
-    if (isAdmin) {
-      document.getElementById('step-role').style.display = 'block';
-      document.getElementById('step-form').style.display = 'none';
-    } else {
-      // Manager goes straight to agent form
-      selectRole('agent');
-    }
+    document.getElementById('step-role').style.display = 'block';
+    document.getElementById('step-form').style.display = 'none';
   }
 
   function closeAddModal() {

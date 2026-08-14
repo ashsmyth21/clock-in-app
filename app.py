@@ -485,7 +485,8 @@ def add_user():
     team = request.form.get('team', '').strip()
 
     if current_user.role == 'manager':
-        role = 'agent'
+        if role not in ('manager', 'agent'):
+            role = 'agent'
         team = current_user.team
     elif current_user.role == 'admin':
         if role not in ('admin', 'manager', 'agent'):

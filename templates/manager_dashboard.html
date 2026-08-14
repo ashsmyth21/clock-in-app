@@ -63,6 +63,11 @@
   {% endfor %}
 </div>
 
+<!-- Team filter -->
+<div class="team-filter-bar" id="team-filter-bar">
+  <button class="team-filter-btn active" data-team="all" onclick="filterTeam('all')">All Teams</button>
+</div>
+
 <!-- Agent grid -->
 <div class="agent-grid" id="agent-grid">
   {% for agent in live %}
@@ -104,6 +109,7 @@
 <script>
   const STATUS_COLOURS = {{ status_colours | tojson }};
   let currentFilter = 'all';
+  let currentTeam = 'all';
 
   function fmtMins(m) {
     if (!m) return '0m';
@@ -122,8 +128,22 @@
     document.querySelectorAll('.status-tile').forEach(t =>
       t.classList.toggle('active', t.dataset.filter === status)
     );
+    applyFilters();
+  }
+
+  function filterTeam(team) {
+    currentTeam = team;
+    document.querySelectorAll('.team-filter-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.team === team)
+    );
+    applyFilters();
+  }
+
+  function applyFilters() {
     document.querySelectorAll('#agent-grid .agent-card').forEach(card => {
-      card.style.display = (status === 'all' || card.dataset.status === status) ? '' : 'none';
+      const statusOk = currentFilter === 'all' || card.dataset.status === currentFilter;
+      const teamOk   = currentTeam  === 'all' || card.dataset.team   === currentTeam;
+      card.style.display = (statusOk && teamOk) ? '' : 'none';
     });
   }
 
@@ -140,6 +160,14 @@
     const grid = document.getElementById('agent-grid');
     grid.innerHTML = '';
 
+    // Rebuild team filter pills from live data
+    const bar = document.getElementById('team-filter-bar');
+    const teams = [...new Set(data.map(a => a.team).filter(Boolean))].sort();
+    bar.innerHTML = `<button class="team-filter-btn ${currentTeam === 'all' ? 'active' : ''}" data-team="all" onclick="filterTeam('all')">All Teams</button>`;
+    teams.forEach(t => {
+      bar.innerHTML += `<button class="team-filter-btn ${currentTeam === t ? 'active' : ''}" data-team="${t}" onclick="filterTeam('${t}')">${t}</button>`;
+    });
+
     let clockedIn = 0, available = 0, onBreak = 0;
     const breakStatuses = ['Lunch', 'Comfort Break', 'Back Soon'];
 
@@ -154,7 +182,10 @@
       card.className = 'agent-card';
       card.dataset.username = agent.username;
       card.dataset.status = agent.status;
-      card.style.display = (currentFilter === 'all' || currentFilter === agent.status) ? '' : 'none';
+      card.dataset.team = agent.team || '';
+      const statusOk = currentFilter === 'all' || currentFilter === agent.status;
+      const teamOk   = currentTeam  === 'all' || currentTeam   === agent.team;
+      card.style.display = (statusOk && teamOk) ? '' : 'none';
       card.innerHTML = `
         <div class="agent-card-top" style="background:${colour};"></div>
         <div class="agent-card-body">

@@ -86,7 +86,7 @@ def init_db():
     lr_cols = [row[1] for row in db.execute('PRAGMA table_info(leave_records)').fetchall()]
     if 'half_day' not in lr_cols:
         db.execute('ALTER TABLE leave_records ADD COLUMN half_day TEXT')
-    db.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND role = 'manager'")
+    db.execute("UPDATE users SET role = 'account_owner' WHERE username = 'admin' AND role IN ('admin', 'manager')")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:
         hashed = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()

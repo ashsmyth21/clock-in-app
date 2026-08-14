@@ -118,7 +118,7 @@ def load_user(user_id):
 def manager_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role not in ('manager', 'admin'):
+        if not current_user.is_authenticated or current_user.role not in ('manager', 'admin', 'account_owner'):
             flash('Manager access required.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
@@ -128,7 +128,7 @@ def manager_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
+        if not current_user.is_authenticated or current_user.role not in ('admin', 'account_owner'):
             flash('Admin access required.', 'danger')
             return redirect(url_for('index'))
         return f(*args, **kwargs)
@@ -136,6 +136,11 @@ def admin_required(f):
 
 
 # ─── Template filters ─────────────────────────────────────────────────────────
+
+@app.template_filter('fmt_role')
+def fmt_role(s):
+    return {'account_owner': 'Account Owner'}.get(s, (s or '').replace('_', ' ').title())
+
 
 @app.template_filter('fmt_mins')
 def fmt_mins(mins):
@@ -238,7 +243,7 @@ def index():
         return redirect(url_for('login'))
     if current_user.force_password_change:
         return redirect(url_for('change_password'))
-    return redirect(url_for('manager_dashboard' if current_user.role in ('manager', 'admin') else 'agent_dashboard'))
+    return redirect(url_for('manager_dashboard' if current_user.role in ('manager', 'admin', 'account_owner') else 'agent_dashboard'))
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -441,9 +446,9 @@ def manager_dashboard():
     if current_user.force_password_change:
         return redirect(url_for('change_password'))
     db = get_db()
-    if current_user.role == 'admin':
+    if current_user.role in ('admin', 'account_owner'):
         agents = db.execute(
-            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role != 'admin' ORDER BY username"
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role NOT IN ('admin', 'account_owner') ORDER BY username"
         ).fetchall()
     else:
         agents = db.execute(
@@ -493,9 +498,9 @@ def manager_dashboard():
 @manager_required
 def api_live_status():
     db = get_db()
-    if current_user.role == 'admin':
+    if current_user.role in ('admin', 'account_owner'):
         agents = db.execute(
-            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role != 'admin' ORDER BY username"
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role NOT IN ('admin', 'account_owner') ORDER BY username"
         ).fetchall()
     else:
         agents = db.execute(
@@ -537,7 +542,7 @@ def user_management():
         "SELECT id, username, role, team, is_active, force_password_change FROM users WHERE deleted_at IS NULL ORDER BY role, username"
     ).fetchall()
     deleted_users = []
-    if current_user.role == 'admin':
+    if current_user.role in ('admin', 'account_owner'):
         deleted_users = db.execute(
             "SELECT id, username, role, team, deleted_at FROM users WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
         ).fetchall()
@@ -561,6 +566,14 @@ def add_user():
         if role not in ('admin', 'manager', 'agent'):
             role = 'agent'
         if role == 'admin':
+            team = None
+        elif team not in TEAMS:
+            flash('Please select a valid team.', 'danger')
+            return redirect(url_for('user_management'))
+    elif current_user.role == 'account_owner':
+        if role not in ('account_owner', 'admin', 'manager', 'agent'):
+            role = 'agent'
+        if role in ('account_owner', 'admin'):
             team = None
         elif team not in TEAMS:
             flash('Please select a valid team.', 'danger')
@@ -627,6 +640,9 @@ def delete_user(uid):
     if not target:
         flash('User not found.', 'danger')
         return redirect(url_for('user_management'))
+    if target['role'] == 'account_owner' and current_user.role != 'account_owner':
+        flash('Only an Account Owner can delete another Account Owner.', 'danger')
+        return redirect(url_for('user_management'))
     if current_user.role == 'manager' and target['role'] != 'agent':
         flash('Managers can only delete agents.', 'danger')
         return redirect(url_for('user_management'))
@@ -662,15 +678,24 @@ def change_role(uid):
         flash('You cannot change your own role.', 'danger')
         return redirect(url_for('user_management'))
     new_role = request.form.get('role', '').strip()
-    if new_role not in ('admin', 'manager', 'agent'):
+    if new_role not in ('account_owner', 'admin', 'manager', 'agent'):
         flash('Invalid role selected.', 'danger')
         return redirect(url_for('user_management'))
+    db = get_db()
+    target_check = db.execute(
+        "SELECT role FROM users WHERE id = ? AND deleted_at IS NULL", (uid,)
+    ).fetchone()
+    if target_check and target_check['role'] == 'account_owner' and current_user.role != 'account_owner':
+        flash('Only an Account Owner can change another Account Owner\'s role.', 'danger')
+        return redirect(url_for('user_management'))
+    if new_role == 'account_owner' and current_user.role != 'account_owner':
+        flash('Only an Account Owner can assign the Account Owner role.', 'danger')
+        return redirect(url_for('user_management'))
     new_team = request.form.get('team', '').strip() or None
-    if new_role == 'admin':
+    if new_role in ('account_owner', 'admin'):
         new_team = None
     elif new_team not in TEAMS:
         new_team = None
-    db = get_db()
     target = db.execute(
         "SELECT username FROM users WHERE id = ? AND deleted_at IS NULL", (uid,)
     ).fetchone()
@@ -712,7 +737,7 @@ def reassign_team(uid):
 @manager_required
 def leave_management():
     db = get_db()
-    if current_user.role == 'admin':
+    if current_user.role in ('admin', 'account_owner'):
         leave_users = db.execute(
             "SELECT id, username, role, team FROM users WHERE deleted_at IS NULL ORDER BY team, username"
         ).fetchall()
@@ -821,7 +846,7 @@ def reports():
     user_filter = request.args.get('user_id', '')
     team_filter = request.args.get('team', '')
 
-    if current_user.role == 'admin':
+    if current_user.role in ('admin', 'account_owner'):
         users = db.execute(
             "SELECT id, username, team FROM users WHERE role = 'agent' ORDER BY team, username"
         ).fetchall()

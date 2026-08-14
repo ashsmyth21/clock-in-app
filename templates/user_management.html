@@ -6,7 +6,7 @@
   <div>
     <div class="page-title">User Management</div>
     <div class="page-sub">
-      {% if current_user.role == 'admin' %}Manage admins, managers and agents across all teams
+      {% if current_user.role in ('admin', 'account_owner') %}Manage all users across all teams
       {% else %}Manage agents in {{ current_user.team or 'your team' }}{% endif %}
     </div>
   </div>
@@ -30,10 +30,10 @@
         <tr>
           <td><strong>{{ user.username }}</strong></td>
           <td>
-            <span class="badge-role {% if user.role in ('manager','admin') %}manager{% endif %}"
-                  style="background:{% if user.role == 'admin' %}#fde8e8{% elif user.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
-                         color:{% if user.role == 'admin' %}#c0392b{% elif user.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
-              {{ user.role }}
+            <span class="badge-role {% if user.role in ('manager','admin','account_owner') %}manager{% endif %}"
+                  style="background:{% if user.role == 'account_owner' %}#fdf5e0{% elif user.role == 'admin' %}#fde8e8{% elif user.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
+                         color:{% if user.role == 'account_owner' %}#92400e{% elif user.role == 'admin' %}#c0392b{% elif user.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
+              {{ user.role|fmt_role }}
             </span>
           </td>
           <td>
@@ -49,14 +49,14 @@
           </td>
           <td>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-              {% if current_user.role == 'admin' or (user.role == 'agent' and user.team == current_user.team) %}
+              {% if current_user.role in ('admin', 'account_owner') or (user.role == 'agent' and user.team == current_user.team) %}
                 <button class="btn btn-sm btn-secondary"
                         onclick="openResetModal({{ user.id }}, '{{ user.username }}')">
                   Reset Password
                 </button>
               {% endif %}
 
-              {% if current_user.role == 'admin' %}
+              {% if current_user.role in ('admin', 'account_owner') %}
                 <form method="POST" action="{{ url_for('reassign_team', uid=user.id) }}"
                       style="display:flex;gap:4px;align-items:center;">
                   <select name="team" style="width:auto;padding:4px 8px;font-size:12px;">
@@ -76,15 +76,19 @@
                 </form>
               {% endif %}
 
-              {% if current_user.role == 'admin' and user.id != current_user.id %}
+              {% if current_user.role in ('admin', 'account_owner') and user.id != current_user.id %}
+                {% if user.role != 'account_owner' or current_user.role == 'account_owner' %}
                 <button class="btn btn-sm btn-secondary"
                         onclick="openRoleModal({{ user.id }}, '{{ user.username }}', '{{ user.role }}', '{{ user.team or '' }}')">
                   Change Role
                 </button>
+                {% endif %}
               {% endif %}
 
               {% if user.id != current_user.id %}
-                {% if current_user.role == 'admin' or (user.role == 'agent' and user.team == current_user.team) %}
+                {% if current_user.role == 'account_owner'
+                   or (current_user.role == 'admin' and user.role != 'account_owner')
+                   or (user.role == 'agent' and user.team == current_user.team) %}
                   <form method="POST" action="{{ url_for('delete_user', uid=user.id) }}"
                         onsubmit="return confirm('Delete {{ user.username }}? They will be removed from all lists but their historical data will be kept in reports.')">
                     <button type="submit" class="btn btn-sm btn-danger">Delete</button>
@@ -101,7 +105,7 @@
 </div>
 
 {# ── Admin: Deleted Users ── #}
-{% if current_user.role == 'admin' and deleted_users %}
+{% if current_user.role in ('admin', 'account_owner') and deleted_users %}
 <div class="card" style="margin-top:24px;border:2px solid #fde8e8;">
   <div class="card-header" style="background:#fde8e8;">
     <span class="card-title" style="color:#c0392b;">Deleted Users</span>
@@ -123,10 +127,10 @@
         <tr style="opacity:0.7;">
           <td><strong>{{ u.username }}</strong></td>
           <td>
-            <span class="badge-role {% if u.role in ('manager','admin') %}manager{% endif %}"
-                  style="background:{% if u.role == 'admin' %}#fde8e8{% elif u.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
-                         color:{% if u.role == 'admin' %}#c0392b{% elif u.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
-              {{ u.role }}
+            <span class="badge-role {% if u.role in ('manager','admin','account_owner') %}manager{% endif %}"
+                  style="background:{% if u.role == 'account_owner' %}#fdf5e0{% elif u.role == 'admin' %}#fde8e8{% elif u.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
+                         color:{% if u.role == 'account_owner' %}#92400e{% elif u.role == 'admin' %}#c0392b{% elif u.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
+              {{ u.role|fmt_role }}
             </span>
           </td>
           <td>{{ u.team or '—' }}</td>
@@ -154,7 +158,14 @@
       <div class="modal-title">Add New User</div>
       <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">Select a user type to continue.</p>
       <div class="role-select-grid">
-        {% if current_user.role == 'admin' %}
+        {% if current_user.role == 'account_owner' %}
+        <button type="button" class="role-card" onclick="selectRole('account_owner')">
+          <div class="role-card-icon" style="background:#92400e;">👑</div>
+          <div class="role-card-name">Account Owner</div>
+          <div class="role-card-desc">Full system access, highest permission level</div>
+        </button>
+        {% endif %}
+        {% if current_user.role in ('admin', 'account_owner') %}
         <button type="button" class="role-card" onclick="selectRole('admin')">
           <div class="role-card-icon" style="background:#c0392b;">🔑</div>
           <div class="role-card-name">Admin</div>
@@ -238,6 +249,9 @@
         <label>New Role</label>
         <select name="role" id="role-modal-select" required onchange="roleModalRoleChange()">
           <option value="">— Select role —</option>
+          {% if current_user.role == 'account_owner' %}
+          <option value="account_owner">Account Owner</option>
+          {% endif %}
           <option value="admin">Admin</option>
           <option value="manager">Manager</option>
           <option value="agent">Agent</option>
@@ -288,7 +302,7 @@
 
 {% block scripts %}
 <script>
-  const isAdmin = {{ ('true' if current_user.role == 'admin' else 'false') }};
+  const isAdmin = {{ ('true' if current_user.role in ('admin', 'account_owner') else 'false') }};
 
   function openAddModal() {
     document.getElementById('add-user-modal').classList.add('open');
@@ -305,15 +319,15 @@
     document.getElementById('step-form').style.display = 'block';
     document.getElementById('selected-role-input').value = role;
 
-    const titles = { admin: 'Add New Admin', manager: 'Add New Manager', agent: 'Add New Agent' };
+    const titles = { account_owner: 'Add New Account Owner', admin: 'Add New Admin', manager: 'Add New Manager', agent: 'Add New Agent' };
     document.getElementById('step-form-title').textContent = titles[role];
     document.getElementById('submit-btn').textContent = titles[role].replace('Add', 'Create');
 
-    // Hide team field for admin role
+    // Hide team field for admin and account_owner roles
     const teamField = document.getElementById('team-field');
     if (teamField) {
       const teamSelect = document.getElementById('team-select');
-      if (role === 'admin') {
+      if (role === 'admin' || role === 'account_owner') {
         teamField.style.display = 'none';
         if (teamSelect) teamSelect.removeAttribute('required');
       } else {
@@ -343,7 +357,7 @@
     const role = document.getElementById('role-modal-select').value;
     const teamGroup = document.getElementById('role-modal-team-group');
     const teamSel = document.getElementById('role-modal-team-select');
-    if (role === 'admin') {
+    if (role === 'admin' || role === 'account_owner') {
       teamGroup.style.display = 'none';
       teamSel.removeAttribute('required');
     } else {

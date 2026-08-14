@@ -33,7 +33,7 @@
         <label>To</label>
         <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
       </div>
-      {% if current_user.role == 'admin' %}
+      {% if current_user.role in ('admin', 'account_owner') %}
       <div class="form-group" style="flex:0 0 160px;">
         <label>Team</label>
         <select name="team" id="team-select" onchange="filterUsersByTeam()">

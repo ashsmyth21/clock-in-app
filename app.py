@@ -359,7 +359,7 @@ def manager_dashboard():
         return redirect(url_for('change_password'))
     db = get_db()
     agents = db.execute(
-        'SELECT id, username, role FROM users WHERE is_active = 1 AND role = 'agent' ORDER BY username'
+        'SELECT id, username, role FROM users WHERE is_active = 1 AND role = "agent" ORDER BY username'
     ).fetchall()
 
     live = []
@@ -404,7 +404,7 @@ def manager_dashboard():
 def api_live_status():
     db = get_db()
     agents = db.execute(
-        'SELECT id, username, role FROM users WHERE is_active = 1 AND role = 'agent' ORDER BY username'
+        'SELECT id, username, role FROM users WHERE is_active = 1 AND role = "agent" ORDER BY username'
     ).fetchall()
     result = []
     for agent in agents:

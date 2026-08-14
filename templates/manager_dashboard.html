@@ -66,6 +66,9 @@
 <!-- Team filter -->
 <div class="team-filter-bar" id="team-filter-bar">
   <button class="team-filter-btn active" data-team="all" onclick="filterTeam('all')">All Teams</button>
+  {% for t in teams %}
+  <button class="team-filter-btn" data-team="{{ t }}" onclick="filterTeam('{{ t }}')">{{ t }}</button>
+  {% endfor %}
 </div>
 
 <!-- Agent grid -->
@@ -159,14 +162,6 @@
   function renderGrid(data) {
     const grid = document.getElementById('agent-grid');
     grid.innerHTML = '';
-
-    // Rebuild team filter pills from live data
-    const bar = document.getElementById('team-filter-bar');
-    const teams = [...new Set(data.map(a => a.team).filter(Boolean))].sort();
-    bar.innerHTML = `<button class="team-filter-btn ${currentTeam === 'all' ? 'active' : ''}" data-team="all" onclick="filterTeam('all')">All Teams</button>`;
-    teams.forEach(t => {
-      bar.innerHTML += `<button class="team-filter-btn ${currentTeam === t ? 'active' : ''}" data-team="${t}" onclick="filterTeam('${t}')">${t}</button>`;
-    });
 
     let clockedIn = 0, available = 0, onBreak = 0;
     const breakStatuses = ['Lunch', 'Comfort Break', 'Back Soon'];

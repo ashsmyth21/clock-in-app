@@ -76,6 +76,13 @@
                 </form>
               {% endif %}
 
+              {% if current_user.role == 'admin' and user.id != current_user.id %}
+                <button class="btn btn-sm btn-secondary"
+                        onclick="openRoleModal({{ user.id }}, '{{ user.username }}', '{{ user.role }}', '{{ user.team or '' }}')">
+                  Change Role
+                </button>
+              {% endif %}
+
               {% if user.id != current_user.id %}
                 {% if current_user.role == 'admin' or (user.role == 'agent' and user.team == current_user.team) %}
                   <form method="POST" action="{{ url_for('delete_user', uid=user.id) }}"
@@ -217,6 +224,43 @@
   </div>
 </div>
 
+{# ── Change Role Modal (admin only) ── #}
+<div class="modal-overlay" id="change-role-modal">
+  <div class="modal-box">
+    <div class="modal-title">Change Role — <span id="role-modal-username"></span></div>
+    <form method="POST" id="change-role-form">
+      <input type="hidden" name="team" id="role-modal-team-hidden">
+      <div class="form-group">
+        <label>Current Role</label>
+        <div id="role-modal-current" style="padding:8px 12px;background:#f5f7fa;border-radius:7px;font-size:13.5px;border:1.5px solid var(--border);color:var(--text-muted);"></div>
+      </div>
+      <div class="form-group">
+        <label>New Role</label>
+        <select name="role" id="role-modal-select" required onchange="roleModalRoleChange()">
+          <option value="">— Select role —</option>
+          <option value="admin">Admin</option>
+          <option value="manager">Manager</option>
+          <option value="agent">Agent</option>
+        </select>
+      </div>
+      <div class="form-group" id="role-modal-team-group" style="display:none;">
+        <label>Team</label>
+        <select name="team" id="role-modal-team-select">
+          <option value="">— Select team —</option>
+          {% for t in teams %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+                onclick="document.getElementById('change-role-modal').classList.remove('open')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Role</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {# ── Reset Password Modal ── #}
 <div class="modal-overlay" id="reset-pw-modal">
   <div class="modal-box">
@@ -282,6 +326,30 @@
   function goBack() {
     document.getElementById('step-form').style.display = 'none';
     document.getElementById('step-role').style.display = 'block';
+  }
+
+  function openRoleModal(uid, username, currentRole, currentTeam) {
+    document.getElementById('role-modal-username').textContent = username;
+    document.getElementById('role-modal-current').textContent = currentRole;
+    document.getElementById('role-modal-select').value = '';
+    document.getElementById('role-modal-team-group').style.display = 'none';
+    const teamSel = document.getElementById('role-modal-team-select');
+    teamSel.value = currentTeam || '';
+    document.getElementById('change-role-form').action = '/manager/users/' + uid + '/change-role';
+    document.getElementById('change-role-modal').classList.add('open');
+  }
+
+  function roleModalRoleChange() {
+    const role = document.getElementById('role-modal-select').value;
+    const teamGroup = document.getElementById('role-modal-team-group');
+    const teamSel = document.getElementById('role-modal-team-select');
+    if (role === 'admin') {
+      teamGroup.style.display = 'none';
+      teamSel.removeAttribute('required');
+    } else {
+      teamGroup.style.display = 'block';
+      teamSel.setAttribute('required', '');
+    }
   }
 
   function openResetModal(uid, username) {

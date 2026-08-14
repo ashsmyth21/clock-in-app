@@ -654,6 +654,35 @@ def restore_user(uid):
     return redirect(url_for('user_management'))
 
 
+@app.route('/manager/users/<int:uid>/change-role', methods=['POST'])
+@login_required
+@admin_required
+def change_role(uid):
+    if uid == current_user.id:
+        flash('You cannot change your own role.', 'danger')
+        return redirect(url_for('user_management'))
+    new_role = request.form.get('role', '').strip()
+    if new_role not in ('admin', 'manager', 'agent'):
+        flash('Invalid role selected.', 'danger')
+        return redirect(url_for('user_management'))
+    new_team = request.form.get('team', '').strip() or None
+    if new_role == 'admin':
+        new_team = None
+    elif new_team not in TEAMS:
+        new_team = None
+    db = get_db()
+    target = db.execute(
+        "SELECT username FROM users WHERE id = ? AND deleted_at IS NULL", (uid,)
+    ).fetchone()
+    if not target:
+        flash('User not found.', 'danger')
+        return redirect(url_for('user_management'))
+    db.execute('UPDATE users SET role = ?, team = ? WHERE id = ?', (new_role, new_team, uid))
+    db.commit()
+    flash(f'{target["username"]} role updated to {new_role}.', 'success')
+    return redirect(url_for('user_management'))
+
+
 @app.route('/manager/users/<int:uid>/reassign-team', methods=['POST'])
 @login_required
 @manager_required

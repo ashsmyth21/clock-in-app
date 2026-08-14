@@ -290,18 +290,35 @@ def agent_dashboard():
         (current_user.id, since)
     ).fetchall()
 
-    history_with_breakdown = []
+    # Group sessions by date so the agent sees one row per day
+    day_groups = {}
     for h in history:
         evts = db.execute(
             'SELECT status, timestamp FROM status_events WHERE session_id = ? ORDER BY timestamp',
             (h['id'],)
         ).fetchall()
+        bd = _status_breakdown(evts, h['clock_out'])
+        day = h['clock_in'][:10] if h['clock_in'] else ''
+        if day not in day_groups:
+            day_groups[day] = {
+                'clock_ins': [], 'clock_outs': [],
+                'total_minutes': 0, 'breakdown': {}, 'has_open': False,
+            }
+        g = day_groups[day]
+        if h['clock_in']:  g['clock_ins'].append(h['clock_in'])
+        if h['clock_out']: g['clock_outs'].append(h['clock_out'])
+        else:              g['has_open'] = True
+        g['total_minutes'] += h['total_minutes'] or 0
+        for s, m in bd.items():
+            g['breakdown'][s] = g['breakdown'].get(s, 0) + m
+
+    history_with_breakdown = []
+    for day, g in sorted(day_groups.items(), reverse=True):
         history_with_breakdown.append({
-            'id': h['id'],
-            'clock_in': h['clock_in'],
-            'clock_out': h['clock_out'],
-            'total_minutes': h['total_minutes'],
-            'breakdown': _status_breakdown(evts, h['clock_out']),
+            'clock_in':      min(g['clock_ins']) if g['clock_ins'] else None,
+            'clock_out':     (max(g['clock_outs']) if g['clock_outs'] and not g['has_open'] else None),
+            'total_minutes': g['total_minutes'] if not g['has_open'] else None,
+            'breakdown':     g['breakdown'],
         })
 
     return render_template('agent_dashboard.html',

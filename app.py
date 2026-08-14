@@ -464,14 +464,9 @@ def api_live_status():
 @manager_required
 def user_management():
     db = get_db()
-    if current_user.role == 'admin':
-        users = db.execute(
-            "SELECT id, username, role, team, is_active, force_password_change FROM users WHERE role != 'admin' ORDER BY role, username"
-        ).fetchall()
-    else:
-        users = db.execute(
-            "SELECT id, username, role, team, is_active, force_password_change FROM users WHERE role = 'agent' ORDER BY username"
-        ).fetchall()
+    users = db.execute(
+        "SELECT id, username, role, team, is_active, force_password_change FROM users ORDER BY role, username"
+    ).fetchall()
     return render_template('user_management.html', users=users)
 
 

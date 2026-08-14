@@ -19,7 +19,7 @@
       <thead>
         <tr>
           <th>Username</th>
-          {% if current_user.role == 'admin' %}<th>Role</th>{% endif %}
+          <th>Role</th>
           <th>Team</th>
           <th>Status</th>
           <th>Password</th>
@@ -30,7 +30,6 @@
         {% for user in users %}
         <tr style="{% if not user.is_active %}opacity:0.55;{% endif %}">
           <td><strong>{{ user.username }}</strong></td>
-          {% if current_user.role == 'admin' %}
           <td>
             <span class="badge-role {% if user.role in ('manager','admin') %}manager{% endif %}"
                   style="background:{% if user.role == 'admin' %}#fde8e8{% elif user.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
@@ -38,7 +37,6 @@
               {{ user.role }}
             </span>
           </td>
-          {% endif %}
           <td>
             {% if user.team %}<span style="font-size:12.5px;">{{ user.team }}</span>
             {% else %}<span style="font-size:12px;color:var(--text-muted);">—</span>{% endif %}
@@ -59,7 +57,7 @@
           </td>
           <td>
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-              {% if current_user.role == 'admin' or user.team == current_user.team %}
+              {% if current_user.role == 'admin' or (user.role == 'agent' and user.team == current_user.team) %}
                 <button class="btn btn-sm btn-secondary"
                         onclick="openResetModal({{ user.id }}, '{{ user.username }}')">
                   Reset Password
@@ -87,7 +85,7 @@
               {% endif %}
 
               {% if user.id != current_user.id %}
-                {% if current_user.role == 'admin' or user.team == current_user.team %}
+                {% if current_user.role == 'admin' or (user.role == 'agent' and user.team == current_user.team) %}
                   <form method="POST" action="{{ url_for('toggle_active', uid=user.id) }}"
                         onsubmit="return confirm('{{ 'Deactivate' if user.is_active else 'Reactivate' }} {{ user.username }}?')">
                     <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-success{% endif %}">

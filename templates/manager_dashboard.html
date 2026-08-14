@@ -40,10 +40,12 @@
   </div>
 </div>
 
-<!-- Status tabs -->
-<div class="status-tabs" id="status-tabs">
-  <button class="status-tab active" data-filter="all" onclick="filterStatus('all')" style="--tab-colour:var(--blue)">
-    All <span class="tab-count">{{ live|length }}</span>
+<!-- Status tiles -->
+<div class="status-tiles" id="status-tabs">
+  <button class="status-tile active" data-filter="all" onclick="filterStatus('all')" style="--tile-colour:var(--blue)">
+    <div class="tile-bar"></div>
+    <div class="tile-count tab-count">{{ live|length }}</div>
+    <div class="tile-label">All</div>
   </button>
   {% for status, colour in [
     ('Available',     '#27ae60'),
@@ -51,11 +53,12 @@
     ('Comfort Break', '#e67e22'),
     ('Training',      '#2980b9'),
     ('Meeting',       '#8e44ad'),
-    ('Back Soon',     '#16a085'),
     ('Clocked Out',   '#95a5a6'),
   ] %}
-  <button class="status-tab" data-filter="{{ status }}" onclick="filterStatus('{{ status }}')" style="--tab-colour:{{ colour }}">
-    {{ status }} <span class="tab-count">{{ live | selectattr('status', 'equalto', status) | list | length }}</span>
+  <button class="status-tile" data-filter="{{ status }}" onclick="filterStatus('{{ status }}')" style="--tile-colour:{{ colour }}">
+    <div class="tile-bar"></div>
+    <div class="tile-count tab-count">{{ live | selectattr('status', 'equalto', status) | list | length }}</div>
+    <div class="tile-label">{{ status }}</div>
   </button>
   {% endfor %}
 </div>
@@ -115,7 +118,7 @@
 
   function filterStatus(status) {
     currentFilter = status;
-    document.querySelectorAll('.status-tab').forEach(t =>
+    document.querySelectorAll('.status-tile').forEach(t =>
       t.classList.toggle('active', t.dataset.filter === status)
     );
     document.querySelectorAll('#agent-grid .agent-card').forEach(card => {
@@ -126,9 +129,9 @@
   function updateTabCounts(data) {
     const counts = { all: data.length };
     data.forEach(a => { counts[a.status] = (counts[a.status] || 0) + 1; });
-    document.querySelectorAll('.status-tab').forEach(tab => {
-      const el = tab.querySelector('.tab-count');
-      if (el) el.textContent = counts[tab.dataset.filter] || 0;
+    document.querySelectorAll('.status-tile').forEach(tile => {
+      const el = tile.querySelector('.tab-count');
+      if (el) el.textContent = counts[tile.dataset.filter] || 0;
     });
   }
 

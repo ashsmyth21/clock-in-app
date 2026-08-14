@@ -39,7 +39,7 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Please log in to continue.'
 login_manager.login_message_category = 'info'
 
-STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting', 'Back Soon']
+STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting']
 
 STATUS_COLOURS = {
     'Available':     '#27ae60',
@@ -47,7 +47,6 @@ STATUS_COLOURS = {
     'Comfort Break': '#e67e22',
     'Training':      '#2980b9',
     'Meeting':       '#8e44ad',
-    'Back Soon':     '#16a085',
     'Clocked Out':   '#95a5a6',
 }
 

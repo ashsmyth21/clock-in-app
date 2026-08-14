@@ -159,5 +159,8 @@
   }
   tick();
   setInterval(tick, 1000);
+
+  // Refresh page every 60s so status breakdown stays current
+  setTimeout(() => location.reload(), 60000);
 </script>
 {% endblock %}

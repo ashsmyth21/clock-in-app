@@ -19,8 +19,7 @@
           <th>User</th>
           <th>Team</th>
           <th>Leave Type</th>
-          <th>From</th>
-          <th>To</th>
+          <th>Date(s)</th>
           <th>Applied By</th>
           <th>Notes</th>
           <th>Action</th>
@@ -36,8 +35,18 @@
               {{ r.leave_type }}
             </span>
           </td>
-          <td>{{ r.leave_date_from|fmt_date }}</td>
-          <td>{{ r.leave_date_to|fmt_date }}</td>
+          <td>
+            {% if r.half_day %}
+              {{ r.leave_date_from|fmt_date }}
+              <span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:#e8f0fe;color:#1a56db;">
+                {{ r.half_day }}
+              </span>
+            {% elif r.leave_date_from == r.leave_date_to %}
+              {{ r.leave_date_from|fmt_date }}
+            {% else %}
+              {{ r.leave_date_from|fmt_date }} → {{ r.leave_date_to|fmt_date }}
+            {% endif %}
+          </td>
           <td style="font-size:12.5px;color:var(--text-muted);">{{ r.applied_by_name }}</td>
           <td style="font-size:12.5px;color:var(--text-muted);">{{ r.notes or '—' }}</td>
           <td>
@@ -67,7 +76,7 @@
 <div class="modal-overlay" id="leave-modal">
   <div class="modal-box">
     <div class="modal-title">Apply Leave</div>
-    <form method="POST" action="{{ url_for('apply_leave') }}">
+    <form method="POST" action="{{ url_for('apply_leave') }}" id="leave-form">
       <div class="form-group">
         <label>User</label>
         <select name="user_id" required>
@@ -80,6 +89,7 @@
           {% endfor %}
         </select>
       </div>
+
       <div class="form-group">
         <label>Leave Type</label>
         <select name="leave_type" required>
@@ -89,20 +99,53 @@
           {% endfor %}
         </select>
       </div>
+
+      <div class="form-group">
+        <label>Duration</label>
+        <div style="display:flex;gap:20px;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;">
+            <input type="radio" name="duration" value="full" checked onchange="leaveDurationChange()">
+            Full Day
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;">
+            <input type="radio" name="duration" value="half" onchange="leaveDurationChange()">
+            Half Day
+          </label>
+        </div>
+      </div>
+
+      <div id="half-day-period" style="display:none;">
+        <div class="form-group">
+          <label>Half Day Period</label>
+          <div style="display:flex;gap:20px;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;">
+              <input type="radio" name="half_day" value="AM" checked>
+              Morning (AM)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;">
+              <input type="radio" name="half_day" value="PM">
+              Afternoon (PM)
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
           <label>From</label>
-          <input type="date" name="date_from" required>
+          <input type="date" name="date_from" id="leave-date-from" required onchange="syncHalfDayDate()">
         </div>
-        <div class="form-group">
+        <div class="form-group" id="date-to-group">
           <label>To</label>
-          <input type="date" name="date_to" required>
+          <input type="date" name="date_to" id="leave-date-to" required>
         </div>
       </div>
+
       <div class="form-group">
         <label>Notes <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
         <input type="text" name="notes" placeholder="e.g. Doctor confirmed sick note">
       </div>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary"
                 onclick="document.getElementById('leave-modal').classList.remove('open')">Cancel</button>
@@ -120,5 +163,27 @@
       if (e.target === overlay) overlay.classList.remove('open');
     });
   });
+
+  function leaveDurationChange() {
+    const isHalf = document.querySelector('[name="duration"]:checked').value === 'half';
+    document.getElementById('half-day-period').style.display = isHalf ? 'block' : 'none';
+    const toGroup = document.getElementById('date-to-group');
+    const dateTo  = document.getElementById('leave-date-to');
+    if (isHalf) {
+      toGroup.style.display = 'none';
+      dateTo.required = false;
+      syncHalfDayDate();
+    } else {
+      toGroup.style.display = 'block';
+      dateTo.required = true;
+    }
+  }
+
+  function syncHalfDayDate() {
+    const isHalf = document.querySelector('[name="duration"]:checked').value === 'half';
+    if (isHalf) {
+      document.getElementById('leave-date-to').value = document.getElementById('leave-date-from').value;
+    }
+  }
 </script>
 {% endblock %}

@@ -42,12 +42,12 @@ login_manager.login_message_category = 'info'
 STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting', 'Projects', 'Tickets']
 
 STATUS_DESCRIPTIONS = {
-    'Available':     'Normal duties — calls, new tickets, etc.',
-    'Lunch':         'Lunch break — max 1 hour per day',
-    'Comfort Break': 'Toilet, drink, smoke break — max 30 mins per day',
-    'Training':      'Ad hoc training — can be documented on request',
-    'Meeting':       'Ad hoc meeting — can be documented on request',
-    'Projects':      'Assigned to a project or outbound calls',
+    'Available':     'Normal duties (calls, new tickets, etc.)',
+    'Lunch':         'Lunch break',
+    'Comfort Break': 'Restroom break, making a drink, etc.',
+    'Training':      'Ad hoc and/or planned training',
+    'Meeting':       'Ad hoc/planned meetings, interviews etc.',
+    'Projects':      'Assigned to a project/task',
     'Tickets':       'Catching up on existing or backlog tickets',
 }
 TEAMS = ['Support', 'Onboarding', 'Risk', 'Credit Control', '2nd Line']
@@ -688,7 +688,7 @@ def leave_management():
             "SELECT id, username, role, team FROM users WHERE deleted_at IS NULL ORDER BY team, username"
         ).fetchall()
         records = db.execute(
-            "SELECT lr.id, lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.notes,"
+            "SELECT lr.id, lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.half_day, lr.notes,"
             " u.id as user_id, u.username, u.team,"
             " ab.username as applied_by_name"
             " FROM leave_records lr"
@@ -703,7 +703,7 @@ def leave_management():
             (current_user.team, current_user.id)
         ).fetchall()
         records = db.execute(
-            "SELECT lr.id, lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.notes,"
+            "SELECT lr.id, lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.half_day, lr.notes,"
             " u.id as user_id, u.username, u.team,"
             " ab.username as applied_by_name"
             " FROM leave_records lr"
@@ -724,7 +724,9 @@ def apply_leave():
     uid        = request.form.get('user_id', type=int)
     leave_type = request.form.get('leave_type', '').strip()
     date_from  = request.form.get('date_from', '').strip()
-    date_to    = request.form.get('date_to', '').strip()
+    duration   = request.form.get('duration', 'full')
+    half_day   = request.form.get('half_day', None) if duration == 'half' else None
+    date_to    = date_from if duration == 'half' else request.form.get('date_to', '').strip()
     notes      = request.form.get('notes', '').strip()
 
     if not uid or leave_type not in LEAVE_TYPES or not date_from or not date_to:
@@ -747,9 +749,9 @@ def apply_leave():
             return redirect(url_for('leave_management'))
 
     db.execute(
-        "INSERT INTO leave_records (user_id, leave_type, leave_date_from, leave_date_to, applied_by, applied_at, notes)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (uid, leave_type, date_from, date_to, current_user.id, datetime.now().isoformat(), notes or None)
+        "INSERT INTO leave_records (user_id, leave_type, leave_date_from, leave_date_to, half_day, applied_by, applied_at, notes)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (uid, leave_type, date_from, date_to, half_day, current_user.id, datetime.now().isoformat(), notes or None)
     )
     db.commit()
     flash('Leave applied.', 'success')

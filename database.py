@@ -83,6 +83,9 @@ def init_db():
             FOREIGN KEY (applied_by) REFERENCES users(id)
         )
     ''')
+    lr_cols = [row[1] for row in db.execute('PRAGMA table_info(leave_records)').fetchall()]
+    if 'half_day' not in lr_cols:
+        db.execute('ALTER TABLE leave_records ADD COLUMN half_day TEXT')
     db.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND role = 'manager'")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:

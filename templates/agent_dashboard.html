@@ -160,7 +160,44 @@
   tick();
   setInterval(tick, 1000);
 
-  // Refresh page every 60s so status breakdown stays current
+  // ── Clock-out warning ─────────────────────────────────────────────────────
+  {% if open_session %}
+  let safeLeave = false;
+
+  // Form submits (clock out, status changes) are intentional
+  document.querySelectorAll('form').forEach(f =>
+    f.addEventListener('submit', () => safeLeave = true)
+  );
+
+  // Internal nav links are intentional (excluding logout, handled separately)
+  document.querySelectorAll('.navbar-nav a:not([href*="logout"])').forEach(a =>
+    a.addEventListener('click', () => safeLeave = true)
+  );
+
+  // Auto-refresh is intentional
+  setTimeout(() => { safeLeave = true; location.reload(); }, 60000);
+
+  // Catch tab/browser close
+  window.addEventListener('beforeunload', e => {
+    if (safeLeave) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  // Custom warning on sign-out
+  const logoutLink = document.querySelector('a[href*="logout"]');
+  if (logoutLink) {
+    logoutLink.addEventListener('click', e => {
+      e.preventDefault();
+      if (confirm("You're still clocked in.\n\nSigning out won't clock you out — your shift will remain open. Clock out first if you've finished your shift.\n\nSign out anyway?")) {
+        safeLeave = true;
+        window.location.href = logoutLink.href;
+      }
+    });
+  }
+  {% else %}
+  // Not clocked in — auto-refresh normally
   setTimeout(() => location.reload(), 60000);
+  {% endif %}
 </script>
 {% endblock %}

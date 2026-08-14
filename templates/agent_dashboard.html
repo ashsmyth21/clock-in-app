@@ -15,7 +15,33 @@
   <!-- Status panel -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title">Current Status</span>
+      <span class="card-title" style="display:inline-flex;align-items:center;gap:8px;">
+        Current Status
+        <span class="status-legend-wrap">
+          <span class="status-legend-icon">i</span>
+          <div class="status-legend-popup">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:4px 8px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);border-bottom:1px solid var(--border);">Status</th>
+                  <th style="text-align:left;padding:4px 8px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);border-bottom:1px solid var(--border);">Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in statuses %}
+                <tr>
+                  <td style="padding:5px 8px;white-space:nowrap;vertical-align:top;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ status_colours.get(s,'#95a5a6') }};margin-right:6px;vertical-align:middle;"></span>
+                    <strong style="font-size:12.5px;">{{ s }}</strong>
+                  </td>
+                  <td style="padding:5px 8px;color:var(--text-muted);font-size:12px;">{{ status_descriptions.get(s, '') }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </span>
+      </span>
       {% if open_session %}
         <span class="text-muted" style="font-size:12px;">
           Shift started {{ open_session['clock_in']|fmt_time }}
@@ -54,8 +80,7 @@
                 <input type="hidden" name="status" value="{{ s }}">
                 <button type="submit"
                         class="status-btn {% if s == current_status %}active{% endif %}"
-                        style="background:{{ col }}{% if s != current_status %}cc{% endif %};"
-                        data-tip="{{ status_descriptions.get(s, s) }}">
+                        style="background:{{ col }}{% if s != current_status %}cc{% endif %};">
                   {{ s }}
                 </button>
               </form>

@@ -14,8 +14,6 @@
 <!-- Filter card -->
 <div class="card mb-24">
   <form method="GET" action="{{ url_for('reports') }}" id="report-form">
-
-    <!-- Preset buttons -->
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
       {% for label, value in [
         ('Today','today'), ('Yesterday','yesterday'),
@@ -26,8 +24,6 @@
       <button type="button" class="preset-btn" data-preset="{{ value }}">{{ label }}</button>
       {% endfor %}
     </div>
-
-    <!-- Pickers + dropdowns -->
     <div class="filter-row">
       <div class="form-group" style="flex:0 0 150px;">
         <label>From</label>
@@ -71,19 +67,19 @@
 <div class="stats-bar mb-24">
   <div class="stat-card">
     <div class="stat-value">{{ total_shifts }}</div>
-    <div class="stat-label">Total Shifts</div>
+    <div class="stat-label">Total Shifts <span class="info-icon" data-tip="Number of agent working days in the selected period. One agent working Monday and Tuesday counts as 2 shifts.">i</span></div>
   </div>
   <div class="stat-card">
-    <div class="stat-value">{{ '%.1f'|format(total_hours) }}h</div>
-    <div class="stat-label">Total Hours</div>
+    <div class="stat-value">{{ (total_hours * 60)|int|fmt_mins }}</div>
+    <div class="stat-label">Total Hours <span class="info-icon" data-tip="Combined clocked-in time across all agents and shifts in this period.">i</span></div>
   </div>
   <div class="stat-card">
-    <div class="stat-value">{{ '%.1f'|format(avg_hours) }}h</div>
-    <div class="stat-label">Avg Hours / Agent</div>
+    <div class="stat-value">{{ (avg_hours * 60)|int|fmt_mins }}</div>
+    <div class="stat-label">Avg Hours / Agent <span class="info-icon" data-tip="Total hours divided by the number of agents who had at least one shift. Policy target: 8h 30m per day.">i</span></div>
   </div>
   <div class="stat-card">
     <div class="stat-value">{{ weekly|length }}</div>
-    <div class="stat-label">Agents with Shifts</div>
+    <div class="stat-label">Agents with Shifts <span class="info-icon" data-tip="Unique agents who clocked in at least once during the selected period.">i</span></div>
   </div>
 </div>
 
@@ -92,14 +88,18 @@
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
 
   <div class="card">
-    <div class="card-header"><span class="card-title">Hours per Agent</span></div>
+    <div class="card-header">
+      <span class="card-title">Hours per Agent <span class="info-icon" data-tip="Total clocked-in time per agent for the selected period. Includes all statuses.">i</span></span>
+    </div>
     <div style="padding:16px;position:relative;height:280px;">
       <canvas id="chart-hours"></canvas>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-header"><span class="card-title">Time in Status</span></div>
+    <div class="card-header">
+      <span class="card-title">Time in Status <span class="info-icon" data-tip="Combined time all agents spent in each status. Policy: max 1h Lunch, max 30m Comfort Break per agent per day.">i</span></span>
+    </div>
     <div style="padding:16px;position:relative;height:280px;">
       <canvas id="chart-status"></canvas>
     </div>
@@ -109,7 +109,9 @@
 
 {% if chart_daily|length > 1 %}
 <div class="card mb-24">
-  <div class="card-header"><span class="card-title">Daily Hours Trend</span></div>
+  <div class="card-header">
+    <span class="card-title">Daily Hours Trend <span class="info-icon" data-tip="Total hours clocked across all agents per day. Useful for spotting low-attendance days.">i</span></span>
+  </div>
   <div style="padding:16px;position:relative;height:200px;">
     <canvas id="chart-daily"></canvas>
   </div>
@@ -117,11 +119,26 @@
 {% endif %}
 {% endif %}
 
+<!-- Policy summary -->
+<div class="card mb-24" style="background:#fffbeb;border:1.5px solid #f39c12;">
+  <div style="padding:14px 20px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:13px;font-weight:700;color:#856404;">Policy Rules</span>
+    <span style="font-size:12.5px;color:#856404;">&#128336; Expected shift: 8h 30m</span>
+    <span style="font-size:12.5px;color:#856404;">&#127829; Max lunch: 1h 00m</span>
+    <span style="font-size:12.5px;color:#856404;">&#9749; Max comfort break: 30m</span>
+  </div>
+</div>
+
 <!-- Shift detail -->
 <div class="card">
   <div class="card-header">
     <span class="card-title">Shift Detail</span>
-    <span class="text-muted" style="font-size:12px;">{{ report_rows|length }} record(s)</span>
+    <span class="text-muted" style="font-size:12px;">{{ report_rows|length }} record(s)
+      {% set breach_count = report_rows | selectattr('flags') | list | length %}
+      {% if breach_count %}
+        &nbsp;<span style="background:#fde8e8;color:#c0392b;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">{{ breach_count }} policy breach{{ 'es' if breach_count != 1 }}</span>
+      {% endif %}
+    </span>
   </div>
 
   {% if report_rows %}
@@ -135,11 +152,12 @@
             <th>Clock Out</th>
             <th>Total</th>
             <th>Status Breakdown</th>
+            <th>Flags</th>
           </tr>
         </thead>
         <tbody>
           {% for row in report_rows %}
-          <tr>
+          <tr {% if row.flags %}style="background:#fffbeb;"{% endif %}>
             <td>
               <strong>{{ row.username }}</strong>
               <div style="font-size:11.5px;color:var(--text-muted);margin-top:1px;">{{ row.team or '—' }}</div>
@@ -168,6 +186,17 @@
                   {% endif %}
                 {% endfor %}
               </div>
+            </td>
+            <td>
+              {% if row.flags %}
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  {% for flag in row.flags %}
+                    <span class="policy-flag">&#9888; {{ flag }}</span>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <span style="color:var(--text-muted);font-size:12px;">—</span>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -238,7 +267,6 @@
     });
   });
 
-  // ── Team → agent dropdown filter ──────────────────────────────────────────
   function filterUsersByTeam() {
     const team = document.getElementById('team-select')?.value || '';
     const sel  = document.getElementById('user-select');
@@ -260,7 +288,7 @@
     return h > 0 ? `${h}h ${String(rem).padStart(2,'0')}m` : `${rem}m`;
   }
 
-  // Bar — hours per agent (store raw minutes, format on display)
+  // Vertical bar — hours per agent
   (function() {
     const raw    = {{ weekly | tojson }};
     const labels = Object.keys(raw).sort((a,b) => raw[b]-raw[a]);
@@ -279,25 +307,25 @@
         }]
       },
       options: {
-        indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${fmtMins(ctx.parsed.x)}` } },
+          tooltip: { callbacks: { label: ctx => ` ${fmtMins(ctx.parsed.y)}` } },
         },
         scales: {
-          x: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: {
             grid: { color: '#f0f3f6' },
             ticks: { font: { size: 11 }, callback: v => fmtMins(v) },
+            beginAtZero: true,
           },
-          y: { grid: { display: false }, ticks: { font: { size: 11 } } },
         }
       }
     });
   })();
 
-  // Donut — status breakdown (store raw minutes)
+  // Donut — status breakdown
   (function() {
     const raw     = {{ chart_statuses | tojson }};
     const labels  = Object.keys(raw);
@@ -326,7 +354,6 @@
   })();
 
   {% if chart_daily|length > 1 %}
-  // Line — daily hours (store raw minutes)
   (function() {
     const raw    = {{ chart_daily | tojson }};
     const labels = Object.keys(raw).map(d => { const [,m,day]=d.split('-'); return `${day}/${m}`; });

@@ -42,6 +42,11 @@ login_manager.login_message_category = 'info'
 STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting']
 TEAMS = ['Support', 'Onboarding', 'Risk', 'Credit Control', '2nd Line']
 
+POLICY = {
+    'lunch_limit_mins': 60,
+    'break_limit_mins': 30,
+}
+
 STATUS_COLOURS = {
     'Available':     '#27ae60',
     'Lunch':         '#f39c12',
@@ -138,7 +143,7 @@ def fmt_date(s):
 
 @app.context_processor
 def inject_globals():
-    return {'status_colours': STATUS_COLOURS, 'statuses': STATUSES, 'teams': TEAMS}
+    return {'status_colours': STATUS_COLOURS, 'statuses': STATUSES, 'teams': TEAMS, 'POLICY': POLICY}
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -717,6 +722,16 @@ def reports():
         clock_in  = min(g['clock_ins'])  if g['clock_ins']  else None
         clock_out = max(g['clock_outs']) if g['clock_outs'] and not g['has_open'] else None
         mins = g['total_minutes']
+        # Policy breach flags
+        flags = []
+        lunch_mins = g['breakdown'].get('Lunch', 0)
+        break_mins = g['breakdown'].get('Comfort Break', 0)
+        if lunch_mins > POLICY['lunch_limit_mins']:
+            over = lunch_mins - POLICY['lunch_limit_mins']
+            flags.append(f"Lunch {lunch_mins}m — {over}m over 1h limit")
+        if break_mins > POLICY['break_limit_mins']:
+            over = break_mins - POLICY['break_limit_mins']
+            flags.append(f"Comfort break {break_mins}m — {over}m over 30m limit")
         report_rows.append({
             'username':      username,
             'team':          g['team'],
@@ -725,6 +740,7 @@ def reports():
             'total_minutes': mins,
             'in_progress':   g['has_open'],
             'breakdown':     g['breakdown'],
+            'flags':         flags,
         })
         weekly[username] = weekly.get(username, 0) + mins
         for s, m in g['breakdown'].items():

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Leave Management — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Leave Management</div>
+    <div class="page-sub">Apply and manage staff leave</div>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('leave-modal').classList.add('open')">+ Apply Leave</button>
+</div>
+
+<div class="card">
+  {% if records %}
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Team</th>
+          <th>Leave Type</th>
+          <th>From</th>
+          <th>To</th>
+          <th>Applied By</th>
+          <th>Notes</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td><strong>{{ r.username }}</strong></td>
+          <td><span style="font-size:12.5px;color:var(--text-muted);">{{ r.team or '—' }}</span></td>
+          <td>
+            <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;color:#fff;background:{{ leave_colours.get(r.leave_type, '#95a5a6') }};">
+              {{ r.leave_type }}
+            </span>
+          </td>
+          <td>{{ r.leave_date_from|fmt_date }}</td>
+          <td>{{ r.leave_date_to|fmt_date }}</td>
+          <td style="font-size:12.5px;color:var(--text-muted);">{{ r.applied_by_name }}</td>
+          <td style="font-size:12.5px;color:var(--text-muted);">{{ r.notes or '—' }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('delete_leave', lid=r.id) }}"
+                  onsubmit="return confirm('Delete this leave record for {{ r.username }}?')">
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="2"/>
+        <line x1="16" y1="20" x2="32" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="16" y1="28" x2="24" y2="28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <p>No leave records yet.</p>
+    </div>
+  {% endif %}
+</div>
+
+{# Apply Leave Modal #}
+<div class="modal-overlay" id="leave-modal">
+  <div class="modal-box">
+    <div class="modal-title">Apply Leave</div>
+    <form method="POST" action="{{ url_for('apply_leave') }}">
+      <div class="form-group">
+        <label>User</label>
+        <select name="user_id" required>
+          <option value="">— Select user —</option>
+          {% for u in leave_users %}
+          <option value="{{ u.id }}">
+            {{ u.username }}{% if u.team %} ({{ u.team }}){% endif %}
+            {% if u.id == current_user.id %} — You{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Leave Type</label>
+        <select name="leave_type" required>
+          <option value="">— Select type —</option>
+          {% for t in leave_types %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label>From</label>
+          <input type="date" name="date_from" required>
+        </div>
+        <div class="form-group">
+          <label>To</label>
+          <input type="date" name="date_to" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+        <input type="text" name="notes" placeholder="e.g. Doctor confirmed sick note">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+                onclick="document.getElementById('leave-modal').classList.remove('open')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Apply Leave</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
+</script>
+{% endblock %}

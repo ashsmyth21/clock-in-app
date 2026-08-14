@@ -157,6 +157,30 @@
         </thead>
         <tbody>
           {% for row in report_rows %}
+          {% if row.is_leave %}
+          <tr style="background:#f0f4ff;">
+            <td>
+              <strong>{{ row.username }}</strong>
+              <div style="font-size:11.5px;color:var(--text-muted);margin-top:1px;">{{ row.team or '—' }}</div>
+            </td>
+            <td>
+              {{ row.leave_date_from|fmt_date }}
+              {% if row.leave_date_to != row.leave_date_from %}
+                <span style="color:var(--text-muted);font-size:11px;"> → {{ row.leave_date_to|fmt_date }}</span>
+              {% endif %}
+            </td>
+            <td>—</td>
+            <td>—</td>
+            <td>—</td>
+            <td>
+              <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;color:#fff;background:{{ leave_colours.get(row.leave_type, '#95a5a6') }};">
+                {{ row.leave_type }}
+              </span>
+              {% if row.notes %}<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">{{ row.notes }}</div>{% endif %}
+            </td>
+            <td><span style="color:var(--text-muted);font-size:12px;">—</span></td>
+          </tr>
+          {% else %}
           <tr {% if row.flags %}style="background:#fffbeb;"{% endif %}>
             <td>
               <strong>{{ row.username }}</strong>
@@ -199,6 +223,7 @@
               {% endif %}
             </td>
           </tr>
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>

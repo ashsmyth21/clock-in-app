@@ -69,6 +69,20 @@ def init_db():
         db.execute('ALTER TABLE users ADD COLUMN team TEXT')
     if 'deleted_at' not in cols:
         db.execute('ALTER TABLE users ADD COLUMN deleted_at TEXT')
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS leave_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            leave_type TEXT NOT NULL,
+            leave_date_from TEXT NOT NULL,
+            leave_date_to TEXT NOT NULL,
+            applied_by INTEGER NOT NULL,
+            applied_at TEXT NOT NULL,
+            notes TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (applied_by) REFERENCES users(id)
+        )
+    ''')
     db.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND role = 'manager'")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:

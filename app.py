@@ -47,6 +47,22 @@ POLICY = {
     'break_limit_mins': 30,
 }
 
+LEAVE_TYPES = [
+    'Sick Leave', 'Emergency Leave', 'Holiday', 'Out of Office',
+    'Parental Leave', 'Sabbatical / Extended Leave', 'Jury Duty', 'Bereavement Leave',
+]
+
+LEAVE_COLOURS = {
+    'Sick Leave':                   '#e74c3c',
+    'Emergency Leave':              '#c0392b',
+    'Holiday':                      '#27ae60',
+    'Out of Office':                '#8e44ad',
+    'Parental Leave':               '#16a085',
+    'Sabbatical / Extended Leave':  '#2980b9',
+    'Jury Duty':                    '#d35400',
+    'Bereavement Leave':            '#7f8c8d',
+}
+
 STATUS_COLOURS = {
     'Available':     '#27ae60',
     'Lunch':         '#f39c12',
@@ -143,7 +159,11 @@ def fmt_date(s):
 
 @app.context_processor
 def inject_globals():
-    return {'status_colours': STATUS_COLOURS, 'statuses': STATUSES, 'teams': TEAMS, 'POLICY': POLICY}
+    return {
+        'status_colours': STATUS_COLOURS, 'statuses': STATUSES,
+        'teams': TEAMS, 'POLICY': POLICY,
+        'leave_types': LEAVE_TYPES, 'leave_colours': LEAVE_COLOURS,
+    }
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -643,6 +663,108 @@ def reassign_team(uid):
     return redirect(url_for('user_management'))
 
 
+# ─── Leave management ─────────────────────────────────────────────────────────
+
+@app.route('/manager/leave')
+@login_required
+@manager_required
+def leave_management():
+    db = get_db()
+    if current_user.role == 'admin':
+        leave_users = db.execute(
+            "SELECT id, username, role, team FROM users WHERE deleted_at IS NULL ORDER BY team, username"
+        ).fetchall()
+        records = db.execute(
+            "SELECT lr.id, lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.notes,"
+            " u.id as user_id, u.username, u.team,"
+            " ab.username as applied_by_name"
+            " FROM leave_records lr"
+            " JOIN users u ON u.id = lr.user_id"
+            " JOIN users ab ON ab.id = lr.applied_by"
+            " ORDER BY lr.leave_date_from DESC"
+        ).fetchall()
+    else:
+        leave_users = db.execute(
+            "SELECT id, username, role, team FROM users"
+            " WHERE deleted_at IS NULL AND (team = ? OR id = ?) ORDER BY username",
+            (current_user.team, current_user.id)
+        ).fetchall()
+        records = db.execute(
+            "SELECT lr.id, lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.notes,"
+            " u.id as user_id, u.username, u.team,"
+            " ab.username as applied_by_name"
+            " FROM leave_records lr"
+            " JOIN users u ON u.id = lr.user_id"
+            " JOIN users ab ON ab.id = lr.applied_by"
+            " WHERE u.team = ? OR u.id = ?"
+            " ORDER BY lr.leave_date_from DESC",
+            (current_user.team, current_user.id)
+        ).fetchall()
+    return render_template('leave_management.html',
+                           leave_users=leave_users, records=records)
+
+
+@app.route('/manager/leave/apply', methods=['POST'])
+@login_required
+@manager_required
+def apply_leave():
+    uid        = request.form.get('user_id', type=int)
+    leave_type = request.form.get('leave_type', '').strip()
+    date_from  = request.form.get('date_from', '').strip()
+    date_to    = request.form.get('date_to', '').strip()
+    notes      = request.form.get('notes', '').strip()
+
+    if not uid or leave_type not in LEAVE_TYPES or not date_from or not date_to:
+        flash('Please fill in all required fields.', 'danger')
+        return redirect(url_for('leave_management'))
+    if date_to < date_from:
+        flash('End date must be on or after start date.', 'danger')
+        return redirect(url_for('leave_management'))
+
+    db = get_db()
+    target = db.execute(
+        "SELECT id, team, role FROM users WHERE id = ? AND deleted_at IS NULL", (uid,)
+    ).fetchone()
+    if not target:
+        flash('User not found.', 'danger')
+        return redirect(url_for('leave_management'))
+    if current_user.role == 'manager':
+        if target['team'] != current_user.team and target['id'] != current_user.id:
+            flash('You can only apply leave for your own team or yourself.', 'danger')
+            return redirect(url_for('leave_management'))
+
+    db.execute(
+        "INSERT INTO leave_records (user_id, leave_type, leave_date_from, leave_date_to, applied_by, applied_at, notes)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (uid, leave_type, date_from, date_to, current_user.id, datetime.now().isoformat(), notes or None)
+    )
+    db.commit()
+    flash('Leave applied.', 'success')
+    return redirect(url_for('leave_management'))
+
+
+@app.route('/manager/leave/<int:lid>/delete', methods=['POST'])
+@login_required
+@manager_required
+def delete_leave(lid):
+    db = get_db()
+    record = db.execute(
+        "SELECT lr.id, u.team, u.id as user_id FROM leave_records lr"
+        " JOIN users u ON u.id = lr.user_id WHERE lr.id = ?", (lid,)
+    ).fetchone()
+    if not record:
+        flash('Leave record not found.', 'danger')
+        return redirect(url_for('leave_management'))
+    if current_user.role == 'manager':
+        if record['team'] != current_user.team and record['user_id'] != current_user.id:
+            flash('Access denied.', 'danger')
+            return redirect(url_for('leave_management'))
+    db.execute('DELETE FROM leave_records WHERE id = ?', (lid,))
+    db.commit()
+    flash('Leave record deleted.', 'success')
+    return redirect(url_for('leave_management'))
+
+
 # ─── Reports ──────────────────────────────────────────────────────────────────
 
 @app.route('/manager/reports')
@@ -748,6 +870,37 @@ def reports():
                 chart_statuses[s] = chart_statuses.get(s, 0) + m
         if date_key:
             chart_daily[date_key] = chart_daily.get(date_key, 0) + mins
+
+    # Also pull in leave records that overlap the date range
+    leave_query = (
+        "SELECT lr.id, u.username, u.team, lr.leave_type,"
+        " lr.leave_date_from, lr.leave_date_to, lr.notes"
+        " FROM leave_records lr JOIN users u ON u.id = lr.user_id"
+        " WHERE lr.leave_date_from <= ? AND lr.leave_date_to >= ?"
+        " AND u.deleted_at IS NULL"
+    )
+    leave_params = [date_to, date_from]
+    if team_filter:
+        leave_query += ' AND u.team = ?'
+        leave_params.append(team_filter)
+    elif current_user.role == 'manager':
+        leave_query += ' AND (u.team = ? OR u.id = ?)'
+        leave_params.extend([current_user.team, current_user.id])
+    if user_filter:
+        leave_query += ' AND lr.user_id = ?'
+        leave_params.append(user_filter)
+    for lr in db.execute(leave_query, leave_params).fetchall():
+        report_rows.append({
+            'username': lr['username'], 'team': lr['team'],
+            'clock_in': lr['leave_date_from'], 'clock_out': None,
+            'total_minutes': None, 'in_progress': False,
+            'breakdown': {}, 'flags': [],
+            'is_leave': True,
+            'leave_type': lr['leave_type'],
+            'leave_date_from': lr['leave_date_from'],
+            'leave_date_to': lr['leave_date_to'],
+            'notes': lr['notes'] or '',
+        })
 
     report_rows.sort(key=lambda r: r['clock_in'] or '', reverse=True)
     chart_daily = dict(sorted(chart_daily.items()))

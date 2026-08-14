@@ -74,7 +74,9 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    row = get_db().execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    row = get_db().execute(
+        'SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (user_id,)
+    ).fetchone()
     return User(row) if row else None
 
 
@@ -210,7 +212,8 @@ def login():
         password = request.form.get('password', '')
         db = get_db()
         row = db.execute(
-            'SELECT * FROM users WHERE username = ? AND is_active = 1', (username,)
+            'SELECT * FROM users WHERE username = ? AND is_active = 1 AND deleted_at IS NULL',
+            (username,)
         ).fetchone()
         if row and bcrypt.checkpw(password.encode(), row['password_hash'].encode()):
             user = User(row)
@@ -402,11 +405,11 @@ def manager_dashboard():
     db = get_db()
     if current_user.role == 'admin':
         agents = db.execute(
-            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role != 'admin' ORDER BY username"
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role != 'admin' ORDER BY username"
         ).fetchall()
     else:
         agents = db.execute(
-            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role = 'agent' ORDER BY username"
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role = 'agent' ORDER BY username"
         ).fetchall()
 
     live = []
@@ -454,11 +457,11 @@ def api_live_status():
     db = get_db()
     if current_user.role == 'admin':
         agents = db.execute(
-            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role != 'admin' ORDER BY username"
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role != 'admin' ORDER BY username"
         ).fetchall()
     else:
         agents = db.execute(
-            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND role = 'agent' ORDER BY username"
+            "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role = 'agent' ORDER BY username"
         ).fetchall()
     result = []
     for agent in agents:
@@ -493,9 +496,14 @@ def api_live_status():
 def user_management():
     db = get_db()
     users = db.execute(
-        "SELECT id, username, role, team, is_active, force_password_change FROM users ORDER BY role, username"
+        "SELECT id, username, role, team, is_active, force_password_change FROM users WHERE deleted_at IS NULL ORDER BY role, username"
     ).fetchall()
-    return render_template('user_management.html', users=users)
+    deleted_users = []
+    if current_user.role == 'admin':
+        deleted_users = db.execute(
+            "SELECT id, username, role, team, deleted_at FROM users WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
+        ).fetchall()
+    return render_template('user_management.html', users=users, deleted_users=deleted_users)
 
 
 @app.route('/manager/users/add', methods=['POST'])
@@ -567,26 +575,44 @@ def reset_password(uid):
     return redirect(url_for('user_management'))
 
 
-@app.route('/manager/users/<int:uid>/toggle-active', methods=['POST'])
+@app.route('/manager/users/<int:uid>/delete', methods=['POST'])
 @login_required
 @manager_required
-def toggle_active(uid):
+def delete_user(uid):
     if uid == current_user.id:
-        flash('You cannot deactivate your own account.', 'danger')
+        flash('You cannot delete your own account.', 'danger')
         return redirect(url_for('user_management'))
     db = get_db()
-    if current_user.role == 'manager':
-        target = db.execute("SELECT role FROM users WHERE id = ?", (uid,)).fetchone()
-        if not target or target['role'] != 'agent':
-            flash('Managers can only deactivate agents.', 'danger')
-            return redirect(url_for('user_management'))
-    row = db.execute('SELECT is_active FROM users WHERE id = ?', (uid,)).fetchone()
-    if row:
-        new_state = 0 if row['is_active'] else 1
-        db.execute('UPDATE users SET is_active = ? WHERE id = ?', (new_state, uid))
-        db.commit()
-        action = 'reactivated' if new_state else 'deactivated'
-        flash(f'User {action}.', 'success')
+    target = db.execute(
+        "SELECT role, username FROM users WHERE id = ? AND deleted_at IS NULL", (uid,)
+    ).fetchone()
+    if not target:
+        flash('User not found.', 'danger')
+        return redirect(url_for('user_management'))
+    if current_user.role == 'manager' and target['role'] != 'agent':
+        flash('Managers can only delete agents.', 'danger')
+        return redirect(url_for('user_management'))
+    db.execute('UPDATE users SET deleted_at = ? WHERE id = ?',
+               (datetime.now().isoformat(), uid))
+    db.commit()
+    flash(f'{target["username"]} has been deleted. Their historical data is retained in reports.', 'success')
+    return redirect(url_for('user_management'))
+
+
+@app.route('/manager/users/<int:uid>/restore', methods=['POST'])
+@login_required
+@admin_required
+def restore_user(uid):
+    db = get_db()
+    target = db.execute(
+        "SELECT username FROM users WHERE id = ? AND deleted_at IS NOT NULL", (uid,)
+    ).fetchone()
+    if not target:
+        flash('User not found.', 'danger')
+        return redirect(url_for('user_management'))
+    db.execute('UPDATE users SET deleted_at = NULL WHERE id = ?', (uid,))
+    db.commit()
+    flash(f'{target["username"]} has been restored.', 'success')
     return redirect(url_for('user_management'))
 
 

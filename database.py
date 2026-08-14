@@ -67,6 +67,8 @@ def init_db():
     cols = [row[1] for row in db.execute('PRAGMA table_info(users)').fetchall()]
     if 'team' not in cols:
         db.execute('ALTER TABLE users ADD COLUMN team TEXT')
+    if 'deleted_at' not in cols:
+        db.execute('ALTER TABLE users ADD COLUMN deleted_at TEXT')
     db.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND role = 'manager'")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:

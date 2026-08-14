@@ -21,7 +21,6 @@
           <th>Username</th>
           <th>Role</th>
           <th>Team</th>
-          <th>Status</th>
           <th>Password</th>
           <th>Actions</th>
         </tr>
@@ -40,13 +39,6 @@
           <td>
             {% if user.team %}<span style="font-size:12.5px;">{{ user.team }}</span>
             {% else %}<span style="font-size:12px;color:var(--text-muted);">—</span>{% endif %}
-          </td>
-          <td>
-            {% if user.is_active %}
-              <span class="status-badge status-Available" style="font-size:12px;">Active</span>
-            {% else %}
-              <span class="status-badge status-Clocked-Out" style="font-size:12px;">Inactive</span>
-            {% endif %}
           </td>
           <td>
             {% if user.force_password_change %}
@@ -86,11 +78,9 @@
 
               {% if user.id != current_user.id %}
                 {% if current_user.role == 'admin' or (user.role == 'agent' and user.team == current_user.team) %}
-                  <form method="POST" action="{{ url_for('toggle_active', uid=user.id) }}"
-                        onsubmit="return confirm('{{ 'Deactivate' if user.is_active else 'Reactivate' }} {{ user.username }}?')">
-                    <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-success{% endif %}">
-                      {{ 'Deactivate' if user.is_active else 'Reactivate' }}
-                    </button>
+                  <form method="POST" action="{{ url_for('delete_user', uid=user.id) }}"
+                        onsubmit="return confirm('Delete {{ user.username }}? They will be removed from all lists but their historical data will be kept in reports.')">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                   </form>
                 {% endif %}
               {% endif %}
@@ -102,6 +92,51 @@
     </table>
   </div>
 </div>
+
+{# ── Admin: Deleted Users ── #}
+{% if current_user.role == 'admin' and deleted_users %}
+<div class="card" style="margin-top:24px;border:2px solid #fde8e8;">
+  <div class="card-header" style="background:#fde8e8;">
+    <span class="card-title" style="color:#c0392b;">Deleted Users</span>
+    <span style="font-size:12px;color:#c0392b;">Admin only &mdash; restore if deleted in error</span>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Team</th>
+          <th>Deleted</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in deleted_users %}
+        <tr style="opacity:0.7;">
+          <td><strong>{{ u.username }}</strong></td>
+          <td>
+            <span class="badge-role {% if u.role in ('manager','admin') %}manager{% endif %}"
+                  style="background:{% if u.role == 'admin' %}#fde8e8{% elif u.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
+                         color:{% if u.role == 'admin' %}#c0392b{% elif u.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
+              {{ u.role }}
+            </span>
+          </td>
+          <td>{{ u.team or '—' }}</td>
+          <td style="font-size:12px;color:var(--text-muted);">{{ u.deleted_at[:16].replace('T',' ') }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('restore_user', uid=u.id) }}"
+                  onsubmit="return confirm('Restore {{ u.username }}?')">
+              <button type="submit" class="btn btn-sm btn-success">Restore</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {# ── Add User Modal (single, multi-step) ── #}
 <div class="modal-overlay" id="add-user-modal">

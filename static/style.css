@@ -602,6 +602,54 @@ tbody tr:hover { background: #f8fafc; }
   margin-top: 20px;
 }
 
+/* ── Role selector cards ──────────────────────────────────────────────────── */
+.role-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.role-card {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 10px;
+  cursor: pointer;
+  background: var(--card);
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.role-card:hover {
+  border-color: var(--blue);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.role-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  margin: 0 auto 10px;
+}
+
+.role-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.role-card-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 /* ── Empty state ──────────────────────────────────────────────────────────── */
 .empty-state {
   text-align: center;

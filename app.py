@@ -488,9 +488,11 @@ def add_user():
         role = 'agent'
         team = current_user.team
     elif current_user.role == 'admin':
-        if role not in ('manager', 'agent'):
+        if role not in ('admin', 'manager', 'agent'):
             role = 'agent'
-        if team not in TEAMS:
+        if role == 'admin':
+            team = None
+        elif team not in TEAMS:
             flash('Please select a valid team.', 'danger')
             return redirect(url_for('user_management'))
 

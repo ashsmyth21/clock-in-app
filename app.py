@@ -39,7 +39,17 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Please log in to continue.'
 login_manager.login_message_category = 'info'
 
-STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting']
+STATUSES = ['Available', 'Lunch', 'Comfort Break', 'Training', 'Meeting', 'Projects', 'Tickets']
+
+STATUS_DESCRIPTIONS = {
+    'Available':     'Normal duties — calls, new tickets, etc.',
+    'Lunch':         'Lunch break — max 1 hour per day',
+    'Comfort Break': 'Toilet, drink, smoke break — max 30 mins per day',
+    'Training':      'Ad hoc training — can be documented on request',
+    'Meeting':       'Ad hoc meeting — can be documented on request',
+    'Projects':      'Assigned to a project or outbound calls',
+    'Tickets':       'Catching up on existing or backlog tickets',
+}
 TEAMS = ['Support', 'Onboarding', 'Risk', 'Credit Control', '2nd Line']
 
 POLICY = {
@@ -69,6 +79,8 @@ STATUS_COLOURS = {
     'Comfort Break': '#e67e22',
     'Training':      '#2980b9',
     'Meeting':       '#8e44ad',
+    'Projects':      '#1abc9c',
+    'Tickets':       '#34495e',
     'Clocked Out':   '#95a5a6',
 }
 
@@ -161,6 +173,7 @@ def fmt_date(s):
 def inject_globals():
     return {
         'status_colours': STATUS_COLOURS, 'statuses': STATUSES,
+        'status_descriptions': STATUS_DESCRIPTIONS,
         'teams': TEAMS, 'POLICY': POLICY,
         'leave_types': LEAVE_TYPES, 'leave_colours': LEAVE_COLOURS,
     }

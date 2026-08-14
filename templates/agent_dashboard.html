@@ -33,6 +33,8 @@
             {% elif current_status == 'Comfort Break' %}☕
             {% elif current_status == 'Training' %}📚
             {% elif current_status == 'Meeting' %}💬
+            {% elif current_status == 'Projects' %}📋
+            {% elif current_status == 'Tickets' %}🎫
             {% else %}⏸{% endif %}
           </div>
           <div class="status-name" style="color:{{ colour }};">{{ current_status }}</div>
@@ -53,7 +55,7 @@
                 <button type="submit"
                         class="status-btn {% if s == current_status %}active{% endif %}"
                         style="background:{{ col }}{% if s != current_status %}cc{% endif %};"
-                        title="{{ s }}">
+                        data-tip="{{ status_descriptions.get(s, s) }}">
                   {{ s }}
                 </button>
               </form>

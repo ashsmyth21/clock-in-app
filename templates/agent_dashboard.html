@@ -118,7 +118,7 @@
               <td>
                 <div class="breakdown-list">
                   {% for s, mins in h.breakdown.items() %}
-                    {% if mins >= 0 %}
+                    {% if mins >= 1 %}
                       <span class="bd-chip" style="background:{{ status_colours.get(s, '#95a5a6') }};"
                             title="{{ s }}">
                         {{ s[:3] }} {{ mins|fmt_mins }}

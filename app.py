@@ -360,6 +360,17 @@ def clock_out():
     return redirect(url_for('agent_dashboard'))
 
 
+@app.route('/agent/auto-clock-out', methods=['POST'])
+@login_required
+def auto_clock_out():
+    db = get_db()
+    sess = _open_session(db, current_user.id)
+    if sess:
+        _do_clock_out(db, sess['id'], current_user.id)
+        db.commit()
+    return '', 204
+
+
 @app.route('/agent/status', methods=['POST'])
 @login_required
 def set_status():

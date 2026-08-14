@@ -177,11 +177,10 @@
   // Auto-refresh is intentional
   setTimeout(() => { safeLeave = true; location.reload(); }, 60000);
 
-  // Catch tab/browser close
-  window.addEventListener('beforeunload', e => {
+  // Auto clock-out on tab/browser close — beacon persists through page unload
+  window.addEventListener('beforeunload', () => {
     if (safeLeave) return;
-    e.preventDefault();
-    e.returnValue = '';
+    navigator.sendBeacon('/agent/auto-clock-out');
   });
 
   // Custom warning on sign-out
@@ -189,8 +188,9 @@
   if (logoutLink) {
     logoutLink.addEventListener('click', e => {
       e.preventDefault();
-      if (confirm("You're still clocked in.\n\nSigning out won't clock you out — your shift will remain open. Clock out first if you've finished your shift.\n\nSign out anyway?")) {
+      if (confirm("You're still clocked in.\n\nSigning out will automatically clock you out.\n\nSign out and clock out now?")) {
         safeLeave = true;
+        navigator.sendBeacon('/agent/auto-clock-out');
         window.location.href = logoutLink.href;
       }
     });

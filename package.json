@@ -1,0 +1,53 @@
+{
+  "name": "staff-clock-in",
+  "version": "1.0.0",
+  "description": "Staff attendance tracker — Flask + SQLite + Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build-win": "electron-builder --win --x64",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.9.0"
+  },
+  "build": {
+    "appId": "com.company.staffclockin",
+    "productName": "Staff Clock-In",
+    "copyright": "Copyright © 2025",
+    "files": [
+      "main.js",
+      "!app.py",
+      "!database.py",
+      "!templates/**",
+      "!static/**",
+      "!*.spec",
+      "!*.db"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/clockin_server",
+        "to": "clockin_server",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "icon.ico"
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "icon": "icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

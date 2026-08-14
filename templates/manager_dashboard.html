@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Live Dashboard — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Live Dashboard</div>
+    <div class="page-sub">Real-time agent status &mdash; updates every 30 seconds</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="refresh-indicator">
+      <div class="pulse-dot"></div>
+      <span id="refresh-label">Live</span>
+    </div>
+    <div id="live-clock" style="font-size:20px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums;"></div>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="stat-value" id="stat-clocked-in">{{ clocked_in_count }}</div>
+    <div class="stat-label">Clocked In</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-total">{{ total_count }}</div>
+    <div class="stat-label">Total Active Staff</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-available" style="color:var(--s-available);">
+      {{ live | selectattr('status', 'equalto', 'Available') | list | length }}
+    </div>
+    <div class="stat-label">Available</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" id="stat-break" style="color:var(--s-lunch);">
+      {{ live | selectattr('status', 'in', ['Lunch', 'Comfort Break', 'Back Soon']) | list | length }}
+    </div>
+    <div class="stat-label">On Break</div>
+  </div>
+</div>
+
+<!-- Agent grid -->
+<div class="agent-grid" id="agent-grid">
+  {% for agent in live %}
+    {% set css_status = agent.status.replace(' ', '-') %}
+    {% set colour = status_colours.get(agent.status, '#95a5a6') %}
+    <div class="agent-card" data-username="{{ agent.username }}">
+      <div class="agent-card-top" style="background:{{ colour }};"></div>
+      <div class="agent-card-body">
+        <div class="agent-name">{{ agent.username }}</div>
+        <div class="agent-role-chip">{{ agent.role }}</div>
+        <div class="agent-status-row">
+          <span class="status-badge status-{{ css_status }}">{{ agent.status }}</span>
+        </div>
+        {% if agent.clocked_in %}
+          <div class="agent-time">
+            In status: <strong>{{ agent.mins_in_status|fmt_mins }}</strong>
+          </div>
+          <div class="agent-time">
+            On shift: <strong>{{ agent.mins_on_shift|fmt_mins }}</strong>
+            (since {{ agent.clock_in|fmt_time }})
+          </div>
+        {% else %}
+          <div class="agent-time">Not on shift</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+{% if not live %}
+  <div class="empty-state">
+    <p>No active staff accounts found.</p>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const STATUS_COLOURS = {{ status_colours | tojson }};
+
+  function fmtMins(m) {
+    if (!m) return '0m';
+    const h = Math.floor(m / 60), rem = m % 60;
+    return h > 0 ? `${h}h ${String(rem).padStart(2,'0')}m` : `${rem}m`;
+  }
+
+  function fmtTime(isoStr) {
+    if (!isoStr) return '–';
+    const d = new Date(isoStr.replace(' ', 'T'));
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderGrid(data) {
+    const grid = document.getElementById('agent-grid');
+    grid.innerHTML = '';
+
+    let clockedIn = 0, available = 0, onBreak = 0;
+    const breakStatuses = ['Lunch', 'Comfort Break', 'Back Soon'];
+
+    data.forEach(agent => {
+      const colour = STATUS_COLOURS[agent.status] || '#95a5a6';
+      const cssStatus = agent.status.replace(/ /g, '-');
+      if (agent.clocked_in) { clockedIn++; }
+      if (agent.status === 'Available') available++;
+      if (breakStatuses.includes(agent.status)) onBreak++;
+
+      const card = document.createElement('div');
+      card.className = 'agent-card';
+      card.dataset.username = agent.username;
+      card.innerHTML = `
+        <div class="agent-card-top" style="background:${colour};"></div>
+        <div class="agent-card-body">
+          <div class="agent-name">${agent.username}</div>
+          <div class="agent-role-chip">${agent.role}</div>
+          <div class="agent-status-row">
+            <span class="status-badge status-${cssStatus}">${agent.status}</span>
+          </div>
+          ${agent.clocked_in
+            ? `<div class="agent-time">In status: <strong>${fmtMins(agent.mins_in_status)}</strong></div>
+               <div class="agent-time">On shift: <strong>${fmtMins(agent.mins_on_shift)}</strong> (since ${fmtTime(agent.clock_in)})</div>`
+            : '<div class="agent-time">Not on shift</div>'
+          }
+        </div>`;
+      grid.appendChild(card);
+    });
+
+    document.getElementById('stat-clocked-in').textContent = clockedIn;
+    document.getElementById('stat-total').textContent = data.length;
+    document.getElementById('stat-available').textContent = available;
+    document.getElementById('stat-break').textContent = onBreak;
+  }
+
+  async function refresh() {
+    try {
+      const resp = await fetch('/api/live-status');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderGrid(data);
+      document.getElementById('refresh-label').textContent =
+        'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch(e) { /* silent */ }
+  }
+
+  // Clock
+  function tick() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('live-clock').textContent = `${h}:${m}:${s}`;
+  }
+  tick(); setInterval(tick, 1000);
+
+  // Auto-refresh every 30 s
+  setInterval(refresh, 30000);
+</script>
+{% endblock %}

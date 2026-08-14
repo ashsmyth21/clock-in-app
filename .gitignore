@@ -1,0 +1,26 @@
+# Database
+attendance.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Node
+node_modules/
+
+# Logs & temp
+error.log
+*.log
+
+# Cloudflare binary
+cloudflared*.exe
+
+# Environment
+.env

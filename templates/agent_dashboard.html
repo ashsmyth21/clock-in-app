@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">My Dashboard</div>
+    <div class="page-sub">Welcome back, {{ current_user.username }}</div>
+  </div>
+  <div id="live-clock" style="font-size:22px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;"></div>
+</div>
+
+<div style="display:grid; grid-template-columns: 340px 1fr; gap:20px; align-items:start;">
+
+  <!-- Status panel -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Current Status</span>
+      {% if open_session %}
+        <span class="text-muted" style="font-size:12px;">
+          Shift started {{ open_session['clock_in']|fmt_time }}
+        </span>
+      {% endif %}
+    </div>
+
+    <div class="status-panel">
+      {% if open_session %}
+        {% set colour = status_colours.get(current_status, '#95a5a6') %}
+        <div class="status-display">
+          <div class="status-circle" style="background:{{ colour }}20; border:3px solid {{ colour }};">
+            {% if current_status == 'Available' %}✓
+            {% elif current_status == 'Lunch' %}🍽
+            {% elif current_status == 'Comfort Break' %}☕
+            {% elif current_status == 'Training' %}📚
+            {% elif current_status == 'Meeting' %}💬
+            {% elif current_status == 'Back Soon' %}⏱
+            {% else %}⏸{% endif %}
+          </div>
+          <div class="status-name" style="color:{{ colour }};">{{ current_status }}</div>
+          {% if minutes_in_status is not none %}
+            <div class="status-meta">For {{ minutes_in_status|fmt_mins }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Status selector -->
+        <div style="margin-bottom:20px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Change Status</div>
+          <div class="status-grid">
+            {% for s in statuses %}
+              {% set cls = s.replace(' ', '-') %}
+              {% set col = status_colours.get(s, '#95a5a6') %}
+              <form method="POST" action="{{ url_for('set_status') }}" style="display:contents;">
+                <input type="hidden" name="status" value="{{ s }}">
+                <button type="submit"
+                        class="status-btn {% if s == current_status %}active{% endif %}"
+                        style="background:{{ col }}{% if s != current_status %}cc{% endif %};"
+                        title="{{ s }}">
+                  {{ s }}
+                </button>
+              </form>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <form method="POST" action="{{ url_for('clock_out') }}">
+            <button type="submit" class="btn btn-danger btn-lg"
+                    onclick="return confirm('Clock out now?')">
+              Clock Out
+            </button>
+          </form>
+        </div>
+
+      {% else %}
+        <div style="margin-bottom:24px;">
+          <div class="status-circle" style="background:#f0f3f6;border:3px solid var(--border);margin:0 auto 12px;font-size:36px;color:var(--text-muted);">
+            ⏸
+          </div>
+          <div class="status-name" style="color:var(--text-muted);">Not Clocked In</div>
+          <div class="status-meta" style="margin-top:6px;">Clock in to begin your shift</div>
+        </div>
+
+        <form method="POST" action="{{ url_for('clock_in') }}">
+          <button type="submit" class="btn btn-success btn-lg">
+            Clock In
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Shift history -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Shift History — Last 7 Days</span>
+    </div>
+
+    {% if history %}
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Clock In</th>
+              <th>Clock Out</th>
+              <th>Total</th>
+              <th>Status Breakdown</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in history %}
+            <tr>
+              <td>{{ h.clock_in|fmt_date }}</td>
+              <td>{{ h.clock_in|fmt_time }}</td>
+              <td>{{ h.clock_out|fmt_time }}</td>
+              <td>
+                <strong>{{ h.total_minutes|fmt_mins }}</strong>
+              </td>
+              <td>
+                <div class="breakdown-list">
+                  {% for s, mins in h.breakdown.items() %}
+                    {% if mins > 0 %}
+                      <span class="bd-chip" style="background:{{ status_colours.get(s, '#95a5a6') }};"
+                            title="{{ s }}">
+                        {{ s[:3] }} {{ mins|fmt_mins }}
+                      </span>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <rect x="8" y="10" width="32" height="30" rx="3" stroke="currentColor" stroke-width="2"/>
+          <line x1="8" y1="18" x2="40" y2="18" stroke="currentColor" stroke-width="2"/>
+          <line x1="16" y1="6" x2="16" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="32" y1="6" x2="32" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <p>No shift history in the last 7 days.</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function tick() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('live-clock').textContent = h + ':' + m + ':' + s;
+  }
+  tick();
+  setInterval(tick, 1000);
+</script>
+{% endblock %}

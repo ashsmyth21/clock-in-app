@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Staff Clock-In{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-layout">
+
+<nav class="navbar">
+  <a href="{{ url_for('index') }}" class="navbar-brand">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <circle cx="11" cy="11" r="10" stroke="white" stroke-width="1.8"/>
+      <path d="M11 6v5.5l3.5 2" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    Staff Clock-In
+  </a>
+
+  {% if current_user.is_authenticated %}
+  <ul class="navbar-nav">
+    {% if current_user.role == 'manager' %}
+      <li><a href="{{ url_for('manager_dashboard') }}" class="{% if request.endpoint == 'manager_dashboard' %}active{% endif %}">Dashboard</a></li>
+      <li><a href="{{ url_for('user_management') }}" class="{% if request.endpoint == 'user_management' %}active{% endif %}">Users</a></li>
+      <li><a href="{{ url_for('reports') }}" class="{% if request.endpoint == 'reports' %}active{% endif %}">Reports</a></li>
+    {% else %}
+      <li><a href="{{ url_for('agent_dashboard') }}" class="{% if request.endpoint == 'agent_dashboard' %}active{% endif %}">My Dashboard</a></li>
+    {% endif %}
+  </ul>
+
+  <div class="navbar-right">
+    <span class="navbar-user">{{ current_user.username }}</span>
+    <span class="badge-role {% if current_user.role == 'manager' %}manager{% endif %}">{{ current_user.role }}</span>
+    <a href="{{ url_for('logout') }}" class="btn-nav">Sign out</a>
+  </div>
+  {% endif %}
+</nav>
+
+<div class="app-content">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">
+        {% if category == 'success' %}✓{% elif category == 'danger' %}✕{% elif category == 'warning' %}!{% else %}i{% endif %}
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</div>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

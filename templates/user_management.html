@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}User Management — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">User Management</div>
+    <div class="page-sub">Add agents, reset passwords, manage accounts</div>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('add-user-modal').classList.add('open')">
+    + Add User
+  </button>
+</div>
+
+<div class="card">
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Password</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr style="{% if not user.is_active %}opacity:0.55;{% endif %}">
+          <td><strong>{{ user.username }}</strong></td>
+          <td>
+            <span class="badge-role {% if user.role == 'manager' %}manager{% endif %}"
+                  style="background:{% if user.role == 'manager' %}#fef3cd{% else %}var(--blue-light){% endif %};
+                         color:{% if user.role == 'manager' %}#856404{% else %}var(--blue-dark){% endif %};">
+              {{ user.role }}
+            </span>
+          </td>
+          <td>
+            {% if user.is_active %}
+              <span class="status-badge status-Available" style="font-size:12px;">Active</span>
+            {% else %}
+              <span class="status-badge status-Clocked-Out" style="font-size:12px;">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if user.force_password_change %}
+              <span style="font-size:12px;color:var(--s-lunch);font-weight:600;">⚠ Must change</span>
+            {% else %}
+              <span style="font-size:12px;color:var(--text-muted);">Set</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-sm btn-secondary"
+                      onclick="openResetModal({{ user.id }}, '{{ user.username }}')">
+                Reset Password
+              </button>
+              {% if user.id != current_user.id %}
+                <form method="POST" action="{{ url_for('toggle_active', uid=user.id) }}"
+                      onsubmit="return confirm('{{ 'Deactivate' if user.is_active else 'Reactivate' }} {{ user.username }}?')">
+                  <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-success{% endif %}">
+                    {{ 'Deactivate' if user.is_active else 'Reactivate' }}
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="add-user-modal">
+  <div class="modal-box">
+    <div class="modal-title">Add New User</div>
+    <form method="POST" action="{{ url_for('add_user') }}">
+      <div class="form-group">
+        <label for="new-username">Username</label>
+        <input type="text" id="new-username" name="username" required placeholder="e.g. jane.smith">
+      </div>
+      <div class="form-group">
+        <label for="new-password">Temporary Password</label>
+        <input type="password" id="new-password" name="password" required
+               placeholder="At least 8 characters" minlength="8">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+          The user will be required to set a new password on first login.
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="new-role">Role</label>
+        <select id="new-role" name="role">
+          <option value="agent">Agent</option>
+          <option value="manager">Manager</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+                onclick="document.getElementById('add-user-modal').classList.remove('open')">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal-overlay" id="reset-pw-modal">
+  <div class="modal-box">
+    <div class="modal-title">Reset Password for <span id="reset-username-label"></span></div>
+    <form method="POST" id="reset-pw-form">
+      <div class="form-group">
+        <label for="reset-password">New Temporary Password</label>
+        <input type="password" id="reset-password" name="new_password" required
+               placeholder="At least 8 characters" minlength="8">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+          The user will be required to change this on next login.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+                onclick="document.getElementById('reset-pw-modal').classList.remove('open')">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">Reset Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openResetModal(uid, username) {
+    document.getElementById('reset-username-label').textContent = username;
+    document.getElementById('reset-pw-form').action = '/manager/users/' + uid + '/reset-password';
+    document.getElementById('reset-pw-modal').classList.add('open');
+  }
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
+</script>
+{% endblock %}

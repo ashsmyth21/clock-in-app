@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Reports — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Attendance Reports</div>
+    <div class="page-sub">Filter by date range and agent, then export to CSV</div>
+  </div>
+</div>
+
+<!-- Filter card -->
+<div class="card mb-24">
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('reports') }}">
+      <div class="filter-row">
+        <div class="form-group" style="flex:0 0 160px;">
+          <label for="date_from">From</label>
+          <input type="date" id="date_from" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="form-group" style="flex:0 0 160px;">
+          <label for="date_to">To</label>
+          <input type="date" id="date_to" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="form-group" style="flex:0 0 200px;">
+          <label for="user_id">Agent</label>
+          <select id="user_id" name="user_id">
+            <option value="">All agents</option>
+            {% for user in users %}
+              <option value="{{ user.id }}" {% if user_filter == user.id|string %}selected{% endif %}>
+                {{ user.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="align-self:flex-end;">
+          <button type="submit" class="btn btn-primary">Apply Filter</button>
+        </div>
+        <div class="form-group" style="align-self:flex-end;">
+          <a href="{{ url_for('export_csv', date_from=date_from, date_to=date_to, user_id=user_filter) }}"
+             class="btn btn-secondary">
+            ↓ Export CSV
+          </a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Weekly summary -->
+{% if weekly %}
+<div class="card mb-24">
+  <div class="card-header">
+    <span class="card-title">Total Hours Summary</span>
+    <span class="text-muted" style="font-size:12px;">{{ date_from }} to {{ date_to }}</span>
+  </div>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>Total Minutes</th>
+          <th>Total Hours</th>
+          <th>Progress</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set max_mins = weekly.values()|max %}
+        {% for username, total_mins in weekly.items()|sort(attribute=1, reverse=True) %}
+        <tr>
+          <td><strong>{{ username }}</strong></td>
+          <td>{{ total_mins }}</td>
+          <td><strong>{{ (total_mins / 60)|round(1) }}h</strong></td>
+          <td style="min-width:160px;">
+            <div style="background:#f0f3f6;border-radius:4px;height:8px;overflow:hidden;">
+              <div style="background:var(--blue);height:100%;width:{{ ((total_mins / max_mins) * 100)|round }}%;border-radius:4px;"></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Detail table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Shift Detail</span>
+    <span class="text-muted" style="font-size:12px;">{{ report_rows|length }} record(s)</span>
+  </div>
+
+  {% if report_rows %}
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Agent</th>
+            <th>Date</th>
+            <th>Clock In</th>
+            <th>Clock Out</th>
+            <th>Total</th>
+            <th>Status Breakdown</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report_rows %}
+          <tr>
+            <td><strong>{{ row.username }}</strong></td>
+            <td>{{ row.clock_in|fmt_date }}</td>
+            <td>{{ row.clock_in|fmt_time }}</td>
+            <td>{{ row.clock_out|fmt_time }}</td>
+            <td>
+              {% if row.total_minutes %}
+                <strong>{{ row.total_minutes|fmt_mins }}</strong>
+              {% else %}
+                <span class="text-muted">In progress</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="breakdown-list">
+                {% for s in statuses_list %}
+                  {% set mins = row.breakdown.get(s, 0) %}
+                  {% if mins > 0 %}
+                    <span class="bd-chip" style="background:{{ status_colours.get(s, '#95a5a6') }};"
+                          title="{{ s }}: {{ mins|fmt_mins }}">
+                      {{ s[:3] }} {{ mins|fmt_mins }}
+                    </span>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <rect x="8" y="10" width="32" height="30" rx="3" stroke="currentColor" stroke-width="2"/>
+        <line x1="15" y1="22" x2="33" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <line x1="15" y1="28" x2="27" y2="28" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <p>No records found for the selected period.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

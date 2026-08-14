@@ -5,7 +5,7 @@
 <div class="page-header">
   <div>
     <div class="page-title">Live Dashboard</div>
-    <div class="page-sub">Real-time agent status &mdash; updates every 30 seconds</div>
+    <div class="page-sub">Real-time agent status &mdash; updates every 10 seconds</div>
   </div>
   <div style="display:flex;align-items:center;gap:16px;">
     <div class="refresh-indicator">
@@ -38,6 +38,26 @@
     </div>
     <div class="stat-label">On Break</div>
   </div>
+</div>
+
+<!-- Status tabs -->
+<div class="status-tabs" id="status-tabs">
+  <button class="status-tab active" data-filter="all" onclick="filterStatus('all')" style="--tab-colour:var(--blue)">
+    All <span class="tab-count">{{ live|length }}</span>
+  </button>
+  {% for status, colour in [
+    ('Available',     '#27ae60'),
+    ('Lunch',         '#f39c12'),
+    ('Comfort Break', '#e67e22'),
+    ('Training',      '#2980b9'),
+    ('Meeting',       '#8e44ad'),
+    ('Back Soon',     '#16a085'),
+    ('Clocked Out',   '#95a5a6'),
+  ] %}
+  <button class="status-tab" data-filter="{{ status }}" onclick="filterStatus('{{ status }}')" style="--tab-colour:{{ colour }}">
+    {{ status }} <span class="tab-count">{{ live | selectattr('status', 'equalto', status) | list | length }}</span>
+  </button>
+  {% endfor %}
 </div>
 
 <!-- Agent grid -->
@@ -79,6 +99,7 @@
 {% block scripts %}
 <script>
   const STATUS_COLOURS = {{ status_colours | tojson }};
+  let currentFilter = 'all';
 
   function fmtMins(m) {
     if (!m) return '0m';
@@ -92,6 +113,25 @@
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  function filterStatus(status) {
+    currentFilter = status;
+    document.querySelectorAll('.status-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.filter === status)
+    );
+    document.querySelectorAll('#agent-grid .agent-card').forEach(card => {
+      card.style.display = (status === 'all' || card.dataset.status === status) ? '' : 'none';
+    });
+  }
+
+  function updateTabCounts(data) {
+    const counts = { all: data.length };
+    data.forEach(a => { counts[a.status] = (counts[a.status] || 0) + 1; });
+    document.querySelectorAll('.status-tab').forEach(tab => {
+      const el = tab.querySelector('.tab-count');
+      if (el) el.textContent = counts[tab.dataset.filter] || 0;
+    });
+  }
+
   function renderGrid(data) {
     const grid = document.getElementById('agent-grid');
     grid.innerHTML = '';
@@ -102,13 +142,15 @@
     data.forEach(agent => {
       const colour = STATUS_COLOURS[agent.status] || '#95a5a6';
       const cssStatus = agent.status.replace(/ /g, '-');
-      if (agent.clocked_in) { clockedIn++; }
+      if (agent.clocked_in) clockedIn++;
       if (agent.status === 'Available') available++;
       if (breakStatuses.includes(agent.status)) onBreak++;
 
       const card = document.createElement('div');
       card.className = 'agent-card';
       card.dataset.username = agent.username;
+      card.dataset.status = agent.status;
+      card.style.display = (currentFilter === 'all' || currentFilter === agent.status) ? '' : 'none';
       card.innerHTML = `
         <div class="agent-card-top" style="background:${colour};"></div>
         <div class="agent-card-body">
@@ -130,6 +172,7 @@
     document.getElementById('stat-total').textContent = data.length;
     document.getElementById('stat-available').textContent = available;
     document.getElementById('stat-break').textContent = onBreak;
+    updateTabCounts(data);
   }
 
   async function refresh() {
@@ -153,7 +196,7 @@
   }
   tick(); setInterval(tick, 1000);
 
-  // Auto-refresh every 30 s
-  setInterval(refresh, 30000);
+  // Auto-refresh every 10 s
+  setInterval(refresh, 10000);
 </script>
 {% endblock %}

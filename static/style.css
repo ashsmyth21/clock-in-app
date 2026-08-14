@@ -606,6 +606,50 @@ tbody tr:hover { background: #f8fafc; }
 .empty-state svg { margin-bottom: 12px; opacity: 0.35; }
 .empty-state p   { font-size: 14px; }
 
+/* ── Status tabs ──────────────────────────────────────────────────────────── */
+.status-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.status-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid var(--border);
+  background: var(--card);
+  color: var(--text-muted);
+  transition: all 0.15s;
+  box-shadow: var(--shadow);
+}
+
+.status-tab:hover { color: var(--text); border-color: #c0c8d4; }
+
+.status-tab.active {
+  background: var(--tab-colour, var(--blue));
+  color: #fff;
+  border-color: transparent;
+}
+
+.tab-count {
+  background: rgba(0,0,0,0.1);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  min-width: 20px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.status-tab.active .tab-count { background: rgba(255,255,255,0.25); }
+
 /* ── Refresh indicator ────────────────────────────────────────────────────── */
 .refresh-indicator {
   font-size: 12px;

@@ -177,6 +177,30 @@
 
 {% block scripts %}
 <script>
+  // Status legend popup — position: fixed so it escapes card overflow
+  (function () {
+    const btn = document.querySelector('.status-legend-icon');
+    const popup = document.querySelector('.status-legend-popup');
+    if (!btn || !popup) return;
+
+    function show() {
+      const r = btn.getBoundingClientRect();
+      popup.style.top  = (r.bottom + 8) + 'px';
+      // keep popup on screen — shift left if it would overflow
+      const left = Math.min(r.left, window.innerWidth - popup.offsetWidth - 12);
+      popup.style.left = Math.max(8, left) + 'px';
+      popup.style.display = 'block';
+    }
+    function hide(e) {
+      if (e.relatedTarget && (btn.contains(e.relatedTarget) || popup.contains(e.relatedTarget))) return;
+      popup.style.display = 'none';
+    }
+
+    btn.addEventListener('mouseenter', show);
+    btn.addEventListener('mouseleave', hide);
+    popup.addEventListener('mouseleave', hide);
+  })();
+
   function tick() {
     const now = new Date();
     const h = String(now.getHours()).padStart(2,'0');

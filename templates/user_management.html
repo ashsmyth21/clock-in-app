@@ -27,7 +27,7 @@
       </thead>
       <tbody>
         {% for user in users %}
-        <tr style="{% if not user.is_active %}opacity:0.55;{% endif %}">
+        <tr>
           <td><strong>{{ user.username }}</strong></td>
           <td>
             <span class="badge-role {% if user.role in ('manager','admin') %}manager{% endif %}"

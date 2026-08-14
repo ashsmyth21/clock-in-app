@@ -610,7 +610,7 @@ def restore_user(uid):
     if not target:
         flash('User not found.', 'danger')
         return redirect(url_for('user_management'))
-    db.execute('UPDATE users SET deleted_at = NULL WHERE id = ?', (uid,))
+    db.execute('UPDATE users SET deleted_at = NULL, is_active = 1 WHERE id = ?', (uid,))
     db.commit()
     flash(f'{target["username"]} has been restored.', 'success')
     return redirect(url_for('user_management'))

@@ -117,43 +117,6 @@
 {% endif %}
 {% endif %}
 
-<!-- Hours summary table -->
-{% if weekly %}
-<div class="card mb-24">
-  <div class="card-header">
-    <span class="card-title">Hours Summary</span>
-    <span class="text-muted" style="font-size:12px;">{{ date_from }} — {{ date_to }}</span>
-  </div>
-  <div class="table-wrapper">
-    <table>
-      <thead>
-        <tr>
-          <th>Agent</th>
-          <th>Shifts</th>
-          <th>Total Hours</th>
-          <th>Progress</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% set max_mins = weekly.values()|max %}
-        {% for username, total_mins in weekly.items()|sort(attribute=1, reverse=True) %}
-        <tr>
-          <td><strong>{{ username }}</strong></td>
-          <td>{{ report_rows | selectattr('username', 'equalto', username) | list | length }}</td>
-          <td><strong>{{ (total_mins / 60)|round(1) }}h</strong></td>
-          <td style="min-width:180px;">
-            <div style="background:#f0f3f6;border-radius:4px;height:8px;overflow:hidden;">
-              <div style="background:var(--blue);height:100%;width:{{ ((total_mins / max_mins) * 100)|round }}%;border-radius:4px;"></div>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
-
 <!-- Shift detail -->
 <div class="card">
   <div class="card-header">
@@ -177,7 +140,10 @@
         <tbody>
           {% for row in report_rows %}
           <tr>
-            <td><strong>{{ row.username }}</strong></td>
+            <td>
+              <strong>{{ row.username }}</strong>
+              <div style="font-size:11.5px;color:var(--text-muted);margin-top:1px;">{{ row.team or '—' }}</div>
+            </td>
             <td>{{ row.clock_in|fmt_date }}</td>
             <td>{{ row.clock_in|fmt_time }}</td>
             <td>{{ row.clock_out|fmt_time }}</td>

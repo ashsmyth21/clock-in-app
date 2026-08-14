@@ -684,8 +684,11 @@ def reports():
     total_hours = sum(weekly.values()) / 60
     avg_hours   = total_hours / len(weekly) if weekly else 0
 
+    user_teams = {r['username']: r['team'] for r in report_rows}
+
     return render_template('reports.html',
                            users=users, report_rows=report_rows, weekly=weekly,
+                           user_teams=user_teams,
                            date_from=date_from, date_to=date_to,
                            user_filter=user_filter, team_filter=team_filter,
                            statuses_list=STATUSES,

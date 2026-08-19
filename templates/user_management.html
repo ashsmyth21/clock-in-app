@@ -207,7 +207,7 @@
         </div>
         <div class="form-group" id="team-field">
           <label>Team</label>
-          {% if current_user.role == 'admin' %}
+          {% if current_user.role in ('admin', 'account_owner') %}
             <select name="team" id="team-select">
               <option value="">— Select team —</option>
               {% for t in teams %}
@@ -222,7 +222,7 @@
           {% endif %}
         </div>
         <div class="modal-footer">
-          {% if current_user.role == 'admin' %}
+          {% if current_user.role in ('admin', 'account_owner') %}
             <button type="button" class="btn btn-secondary" onclick="goBack()">Back</button>
           {% else %}
             <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>

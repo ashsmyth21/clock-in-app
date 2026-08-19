@@ -473,23 +473,61 @@ def heartbeat():
     return '', 204
 
 
-def _auto_clockout_stale(db, threshold_mins=30):
-    """Clock out sessions whose last heartbeat is older than threshold_mins."""
-    cutoff = (datetime.now() - timedelta(minutes=threshold_mins)).isoformat()
-    stale = db.execute(
-        "SELECT id, last_heartbeat, clock_in FROM sessions"
-        " WHERE clock_out IS NULL AND last_heartbeat IS NOT NULL AND last_heartbeat < ?",
-        (cutoff,)
+_STALE_THRESHOLDS = {
+    'Lunch':         90,  # 1hr allowance + 30min buffer
+    'Comfort Break': 60,  # 30min allowance + 30min buffer
+}
+_STALE_DEFAULT = 30
+_WORK_START = 8   # 08:00
+_WORK_END   = 18  # 18:00
+
+
+def _is_working_hours(now):
+    if now.weekday() >= 5:  # Saturday / Sunday
+        return False
+    return _WORK_START <= now.hour < _WORK_END
+
+
+def _auto_clockout_stale(db):
+    """Clock out sessions that are stale or outside working hours."""
+    open_sessions = db.execute(
+        "SELECT id, last_heartbeat, clock_in FROM sessions WHERE clock_out IS NULL"
     ).fetchall()
-    for s in stale:
-        clock_out_time = s['last_heartbeat']
+    now = datetime.now()
+    in_hours = _is_working_hours(now)
+    to_close = []
+    for s in open_sessions:
+        if not in_hours:
+            # Outside 08:00–18:00 Mon–Fri: close all open sessions.
+            # Cap the recorded clock-out at 18:00 on the day the heartbeat was last seen.
+            if s['last_heartbeat']:
+                hb_dt = datetime.fromisoformat(s['last_heartbeat'])
+                eod = hb_dt.replace(hour=_WORK_END, minute=0, second=0, microsecond=0)
+                clock_out_time = min(hb_dt, eod).isoformat()
+            else:
+                # No heartbeat recorded — use 18:00 today (or clock_in if later somehow)
+                clock_out_time = now.replace(hour=_WORK_END, minute=0, second=0, microsecond=0).isoformat()
+            to_close.append((s['id'], clock_out_time, s['clock_in']))
+        else:
+            # Within working hours: use heartbeat-idle threshold per status.
+            if not s['last_heartbeat']:
+                continue
+            idle_mins = (now - datetime.fromisoformat(s['last_heartbeat'])).total_seconds() / 60
+            ev = db.execute(
+                "SELECT status FROM status_events WHERE session_id = ? ORDER BY timestamp DESC LIMIT 1",
+                (s['id'],)
+            ).fetchone()
+            threshold = _STALE_THRESHOLDS.get(ev['status'] if ev else '', _STALE_DEFAULT)
+            if idle_mins >= threshold:
+                to_close.append((s['id'], s['last_heartbeat'], s['clock_in']))
+    for sid, clock_out_time, clock_in in to_close:
         total = max(0, int(
-            (datetime.fromisoformat(clock_out_time) - datetime.fromisoformat(s['clock_in'])
+            (datetime.fromisoformat(clock_out_time) - datetime.fromisoformat(clock_in)
              ).total_seconds() / 60
         ))
         db.execute('UPDATE sessions SET clock_out = ?, total_minutes = ? WHERE id = ?',
-                   (clock_out_time, total, s['id']))
-    if stale:
+                   (clock_out_time, total, sid))
+    if to_close:
         db.commit()
 
 

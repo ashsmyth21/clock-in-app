@@ -90,13 +90,22 @@ STATUS_COLOURS = {
 
 # ─── Slack helpers ────────────────────────────────────────────────────────────
 
-def _post_slack(url, text):
-    """Fire-and-forget POST to a Slack incoming webhook. Silently swallows errors."""
+_SLACK_BOT_TOKEN = os.environ.get('SLACK_BOT_TOKEN', '')
+
+
+def _post_slack(channel_id, text):
+    """Post a message via the Slack Web API. Silently swallows errors."""
+    if not _SLACK_BOT_TOKEN or not channel_id:
+        return
     try:
-        payload = json.dumps({'text': text}).encode('utf-8')
+        payload = json.dumps({'channel': channel_id, 'text': text}).encode('utf-8')
         req = urllib.request.Request(
-            url, data=payload,
-            headers={'Content-Type': 'application/json'},
+            'https://slack.com/api/chat.postMessage',
+            data=payload,
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {_SLACK_BOT_TOKEN}',
+            },
             method='POST',
         )
         urllib.request.urlopen(req, timeout=5)
@@ -104,14 +113,14 @@ def _post_slack(url, text):
         pass
 
 
-def _team_webhook(db, team):
-    """Return the webhook URL for a team, or None."""
+def _team_channel(db, team):
+    """Return the Slack channel ID for a team, or None."""
     if not team:
         return None
     row = db.execute(
-        'SELECT webhook_url FROM slack_webhooks WHERE team = ?', (team,)
+        'SELECT channel_id FROM slack_webhooks WHERE team = ?', (team,)
     ).fetchone()
-    return row['webhook_url'] if row else None
+    return row['channel_id'] if row else None
 
 
 _ABSENCE_STATUSES = {'Lunch', 'Comfort Break'}
@@ -120,7 +129,7 @@ _ABSENCE_ICONS    = {'Lunch': '🍽', 'Comfort Break': '☕'}
 
 def _absence_notify(db, username, team, prev_status, new_status):
     """Post to the team Slack channel when entering or leaving an absence status."""
-    webhook = _team_webhook(db, team)
+    webhook = _team_channel(db, team)
     if not webhook:
         return
     if new_status in _ABSENCE_STATUSES:
@@ -859,7 +868,7 @@ def apply_leave():
     # Slack notification
     target_user = db.execute("SELECT username, team FROM users WHERE id = ?", (uid,)).fetchone()
     if target_user:
-        webhook = _team_webhook(db, target_user['team'])
+        webhook = _team_channel(db, target_user['team'])
         if webhook:
             period = f" ({half_day})" if half_day else ''
             if date_from == date_to:
@@ -895,7 +904,7 @@ def delete_leave(lid):
     db.execute('DELETE FROM leave_records WHERE id = ?', (lid,))
     db.commit()
     if leave_row:
-        webhook = _team_webhook(db, leave_row['team'])
+        webhook = _team_channel(db, leave_row['team'])
         if webhook:
             period = f" ({leave_row['half_day']})" if leave_row['half_day'] else ''
             if leave_row['leave_date_from'] == leave_row['leave_date_to']:
@@ -917,20 +926,20 @@ def slack_settings():
     db = get_db()
     if request.method == 'POST':
         for team in TEAMS:
-            url = request.form.get(f'webhook_{team}', '').strip()
-            if url:
+            cid = request.form.get(f'channel_{team}', '').strip()
+            if cid:
                 db.execute(
-                    "INSERT INTO slack_webhooks (team, webhook_url, updated_at) VALUES (?, ?, ?)"
-                    " ON CONFLICT(team) DO UPDATE SET webhook_url=excluded.webhook_url, updated_at=excluded.updated_at",
-                    (team, url, datetime.now().isoformat())
+                    "INSERT INTO slack_webhooks (team, channel_id, updated_at) VALUES (?, ?, ?)"
+                    " ON CONFLICT(team) DO UPDATE SET channel_id=excluded.channel_id, updated_at=excluded.updated_at",
+                    (team, cid, datetime.now().isoformat())
                 )
             else:
                 db.execute('DELETE FROM slack_webhooks WHERE team = ?', (team,))
         db.commit()
-        flash('Slack webhook URLs saved.', 'success')
+        flash('Slack channel IDs saved.', 'success')
         return redirect(url_for('slack_settings'))
-    webhooks = {row['team']: row['webhook_url']
-                for row in db.execute('SELECT team, webhook_url FROM slack_webhooks').fetchall()}
+    webhooks = {row['team']: row['channel_id']
+                for row in db.execute('SELECT team, channel_id FROM slack_webhooks').fetchall()}
     return render_template('slack_settings.html', webhooks=webhooks)
 
 
@@ -975,7 +984,7 @@ def lunch_schedule():
     schedules = {}
     for team in teams_to_schedule:
         slots = _build_lunch_slots(db, team)
-        schedules[team] = {'slots': slots, 'has_webhook': bool(_team_webhook(db, team))}
+        schedules[team] = {'slots': slots, 'has_webhook': bool(_team_channel(db, team))}
     return render_template('lunch_schedule.html', schedules=schedules,
                            today=date.today().strftime('%d %b %Y'))
 
@@ -989,9 +998,9 @@ def post_lunch_to_slack():
         flash('No team specified.', 'danger')
         return redirect(url_for('lunch_schedule'))
     db = get_db()
-    webhook = _team_webhook(db, team)
+    webhook = _team_channel(db, team)
     if not webhook:
-        flash(f'No Slack webhook configured for {team}.', 'danger')
+        flash(f'No Slack channel configured for {team}.', 'danger')
         return redirect(url_for('lunch_schedule'))
     slots = _build_lunch_slots(db, team)
     if not slots:

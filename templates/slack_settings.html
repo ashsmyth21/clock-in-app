@@ -5,35 +5,46 @@
 <div class="page-header">
   <div>
     <div class="page-title">Slack Settings</div>
-    <div class="page-sub">Configure incoming webhook URLs per team</div>
+    <div class="page-sub">Configure your Slack App bot token and channel IDs per team</div>
   </div>
 </div>
 
-<div class="card">
-  <p style="color:var(--text-muted);font-size:13.5px;margin-bottom:4px;">
-    Paste an <strong>Incoming Webhook URL</strong> for each team's Slack channel.
-  </p>
-  <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">
-    In Slack: <strong>Apps → Incoming Webhooks → Add to Workspace</strong>, pick the channel, copy the URL.
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header"><span class="card-title">Step 1 — Create a Slack App &amp; get a Bot Token</span></div>
+  <ol style="font-size:13.5px;line-height:1.9;padding-left:20px;margin:0;">
+    <li>Go to <strong>api.slack.com/apps</strong> and click <strong>Create New App → From scratch</strong>.</li>
+    <li>Name it (e.g. <em>Staff Clock-In</em>) and pick your workspace.</li>
+    <li>Under <strong>OAuth &amp; Permissions → Bot Token Scopes</strong>, add <code>chat:write</code>.</li>
+    <li>Click <strong>Install to Workspace</strong> and authorise it.</li>
+    <li>Copy the <strong>Bot User OAuth Token</strong> (starts <code>xoxb-…</code>).</li>
+    <li>In PythonAnywhere: <strong>Web tab → Environment variables</strong> — add <code>SLACK_BOT_TOKEN</code> with that value, then <strong>Reload</strong> the app.</li>
+    <li>Invite the bot to each team channel: type <code>/invite @Staff Clock-In</code> in the channel.</li>
+  </ol>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header"><span class="card-title">Step 2 — Enter channel IDs below</span></div>
+  <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">
+    To find a channel ID: right-click the channel name in Slack → <strong>View channel details</strong> → scroll to the bottom. It looks like <code>C0123ABCDEF</code>.
     Leave a field blank to disable notifications for that team.
   </p>
   <form method="POST">
     {% for team in teams %}
     <div class="form-group">
       <label>{{ team }}</label>
-      <input type="url" name="webhook_{{ team }}"
+      <input type="text" name="channel_{{ team }}"
              value="{{ webhooks.get(team, '') }}"
-             placeholder="https://hooks.slack.com/services/…"
-             style="font-size:12.5px;">
+             placeholder="C0123ABCDEF"
+             style="font-size:12.5px;font-family:monospace;">
     </div>
     {% endfor %}
     <div style="margin-top:8px;">
-      <button type="submit" class="btn btn-primary">Save Webhooks</button>
+      <button type="submit" class="btn btn-primary">Save Channel IDs</button>
     </div>
   </form>
 </div>
 
-<div class="card" style="margin-top:20px;">
+<div class="card">
   <div class="card-header"><span class="card-title">What gets posted</span></div>
   <table style="font-size:13px;">
     <thead>

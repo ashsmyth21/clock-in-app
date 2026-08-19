@@ -90,10 +90,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS slack_webhooks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             team TEXT NOT NULL UNIQUE,
-            webhook_url TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
     ''')
+    sw_cols = [row[1] for row in db.execute('PRAGMA table_info(slack_webhooks)').fetchall()]
+    if 'webhook_url' in sw_cols and 'channel_id' not in sw_cols:
+        db.execute('ALTER TABLE slack_webhooks RENAME COLUMN webhook_url TO channel_id')
     db.execute("UPDATE users SET role = 'account_owner' WHERE username = 'admin' AND role IN ('admin', 'manager')")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:

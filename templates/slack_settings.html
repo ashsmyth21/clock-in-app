@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Slack Settings — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Slack Settings</div>
+    <div class="page-sub">Configure incoming webhook URLs per team</div>
+  </div>
+</div>
+
+<div class="card">
+  <p style="color:var(--text-muted);font-size:13.5px;margin-bottom:4px;">
+    Paste an <strong>Incoming Webhook URL</strong> for each team's Slack channel.
+  </p>
+  <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px;">
+    In Slack: <strong>Apps → Incoming Webhooks → Add to Workspace</strong>, pick the channel, copy the URL.
+    Leave a field blank to disable notifications for that team.
+  </p>
+  <form method="POST">
+    {% for team in teams %}
+    <div class="form-group">
+      <label>{{ team }}</label>
+      <input type="url" name="webhook_{{ team }}"
+             value="{{ webhooks.get(team, '') }}"
+             placeholder="https://hooks.slack.com/services/…"
+             style="font-size:12.5px;">
+    </div>
+    {% endfor %}
+    <div style="margin-top:8px;">
+      <button type="submit" class="btn btn-primary">Save Webhooks</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="margin-top:20px;">
+  <div class="card-header"><span class="card-title">What gets posted</span></div>
+  <table style="font-size:13px;">
+    <thead>
+      <tr>
+        <th>Event</th>
+        <th>Example message</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Agent goes to Lunch</td><td>🍽 <em>Ava</em> is on lunch</td></tr>
+      <tr><td>Agent returns from Lunch</td><td>✅ <em>Ava</em> is back from lunch</td></tr>
+      <tr><td>Agent goes on Comfort Break</td><td>☕ <em>Ben</em> is on comfort break</td></tr>
+      <tr><td>Agent returns from Comfort Break</td><td>✅ <em>Ben</em> is back from comfort break</td></tr>
+      <tr><td>Leave applied</td><td>📅 <em>Ava</em> — Holiday | 18 Aug → 22 Aug</td></tr>
+      <tr><td>Leave cancelled</td><td>🗑 Leave cancelled — <em>Ava</em> (Holiday, 18 Aug → 22 Aug)</td></tr>
+      <tr><td>Lunch schedule posted</td><td>🍽️ Lunch Schedule — Support (19 Aug 2026)<br>12:00 — Ava &amp; Ben<br>12:15 — Daisy</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

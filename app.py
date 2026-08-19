@@ -1,8 +1,11 @@
 import csv
 import io
+import json
 import logging
 import os
+import random
 import sys
+import urllib.request
 from datetime import datetime, date, timedelta
 from functools import wraps
 
@@ -83,6 +86,48 @@ STATUS_COLOURS = {
     'Tickets':       '#34495e',
     'Clocked Out':   '#95a5a6',
 }
+
+
+# ─── Slack helpers ────────────────────────────────────────────────────────────
+
+def _post_slack(url, text):
+    """Fire-and-forget POST to a Slack incoming webhook. Silently swallows errors."""
+    try:
+        payload = json.dumps({'text': text}).encode('utf-8')
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST',
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+
+
+def _team_webhook(db, team):
+    """Return the webhook URL for a team, or None."""
+    if not team:
+        return None
+    row = db.execute(
+        'SELECT webhook_url FROM slack_webhooks WHERE team = ?', (team,)
+    ).fetchone()
+    return row['webhook_url'] if row else None
+
+
+_ABSENCE_STATUSES = {'Lunch', 'Comfort Break'}
+_ABSENCE_ICONS    = {'Lunch': '🍽', 'Comfort Break': '☕'}
+
+
+def _absence_notify(db, username, team, prev_status, new_status):
+    """Post to the team Slack channel when entering or leaving an absence status."""
+    webhook = _team_webhook(db, team)
+    if not webhook:
+        return
+    if new_status in _ABSENCE_STATUSES:
+        icon = _ABSENCE_ICONS.get(new_status, '⏸')
+        _post_slack(webhook, f"{icon} *{username}* is on {new_status.lower()}")
+    elif prev_status in _ABSENCE_STATUSES:
+        _post_slack(webhook, f"✅ *{username}* is back from {prev_status.lower()}")
 
 
 # ─── User model ───────────────────────────────────────────────────────────────
@@ -429,11 +474,14 @@ def set_status():
     if not sess:
         flash('You must clock in before setting a status.', 'warning')
         return redirect(url_for('agent_dashboard'))
+    prev_ev = _current_status(db, sess['id'])
+    prev_status = prev_ev['status'] if prev_ev else 'Available'
     db.execute(
         'INSERT INTO status_events (user_id, session_id, status, timestamp) VALUES (?, ?, ?, ?)',
         (current_user.id, sess['id'], status, datetime.now().isoformat())
     )
     db.commit()
+    _absence_notify(db, current_user.username, current_user.team, prev_status, status)
     return redirect(url_for('agent_dashboard'))
 
 
@@ -808,6 +856,17 @@ def apply_leave():
         (uid, leave_type, date_from, date_to, half_day, current_user.id, datetime.now().isoformat(), notes or None)
     )
     db.commit()
+    # Slack notification
+    target_user = db.execute("SELECT username, team FROM users WHERE id = ?", (uid,)).fetchone()
+    if target_user:
+        webhook = _team_webhook(db, target_user['team'])
+        if webhook:
+            period = f" ({half_day})" if half_day else ''
+            if date_from == date_to:
+                date_str = datetime.fromisoformat(date_from).strftime('%d %b') + period
+            else:
+                date_str = f"{datetime.fromisoformat(date_from).strftime('%d %b')} → {datetime.fromisoformat(date_to).strftime('%d %b')}{period}"
+            _post_slack(webhook, f"📅 *{target_user['username']}* — {leave_type} | {date_str}")
     flash('Leave applied.', 'success')
     return redirect(url_for('leave_management'))
 
@@ -828,10 +887,122 @@ def delete_leave(lid):
         if record['team'] != current_user.team and record['user_id'] != current_user.id:
             flash('Access denied.', 'danger')
             return redirect(url_for('leave_management'))
+    leave_row = db.execute(
+        "SELECT lr.leave_type, lr.leave_date_from, lr.leave_date_to, lr.half_day,"
+        " u.username, u.team FROM leave_records lr JOIN users u ON u.id = lr.user_id WHERE lr.id = ?",
+        (lid,)
+    ).fetchone()
     db.execute('DELETE FROM leave_records WHERE id = ?', (lid,))
     db.commit()
+    if leave_row:
+        webhook = _team_webhook(db, leave_row['team'])
+        if webhook:
+            period = f" ({leave_row['half_day']})" if leave_row['half_day'] else ''
+            if leave_row['leave_date_from'] == leave_row['leave_date_to']:
+                date_str = datetime.fromisoformat(leave_row['leave_date_from']).strftime('%d %b') + period
+            else:
+                date_str = (f"{datetime.fromisoformat(leave_row['leave_date_from']).strftime('%d %b')}"
+                            f" → {datetime.fromisoformat(leave_row['leave_date_to']).strftime('%d %b')}{period}")
+            _post_slack(webhook, f"🗑 Leave cancelled — *{leave_row['username']}* ({leave_row['leave_type']}, {date_str})")
     flash('Leave record deleted.', 'success')
     return redirect(url_for('leave_management'))
+
+
+# ─── Slack settings ───────────────────────────────────────────────────────────
+
+@app.route('/admin/slack', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def slack_settings():
+    db = get_db()
+    if request.method == 'POST':
+        for team in TEAMS:
+            url = request.form.get(f'webhook_{team}', '').strip()
+            if url:
+                db.execute(
+                    "INSERT INTO slack_webhooks (team, webhook_url, updated_at) VALUES (?, ?, ?)"
+                    " ON CONFLICT(team) DO UPDATE SET webhook_url=excluded.webhook_url, updated_at=excluded.updated_at",
+                    (team, url, datetime.now().isoformat())
+                )
+            else:
+                db.execute('DELETE FROM slack_webhooks WHERE team = ?', (team,))
+        db.commit()
+        flash('Slack webhook URLs saved.', 'success')
+        return redirect(url_for('slack_settings'))
+    webhooks = {row['team']: row['webhook_url']
+                for row in db.execute('SELECT team, webhook_url FROM slack_webhooks').fetchall()}
+    return render_template('slack_settings.html', webhooks=webhooks)
+
+
+# ─── Lunch scheduler ──────────────────────────────────────────────────────────
+
+def _build_lunch_slots(db, team):
+    today = date.today().isoformat()
+    agents = db.execute(
+        "SELECT u.username FROM sessions s JOIN users u ON u.id = s.user_id"
+        " WHERE date(s.clock_in) = ? AND s.clock_out IS NULL"
+        " AND u.team = ? AND u.deleted_at IS NULL AND u.is_active = 1",
+        (today, team)
+    ).fetchall()
+    names = [a['username'] for a in agents]
+    on_leave = {r['username'] for r in db.execute(
+        "SELECT u.username FROM leave_records lr JOIN users u ON u.id = lr.user_id"
+        " WHERE lr.leave_date_from <= ? AND lr.leave_date_to >= ? AND u.team = ?",
+        (today, today, team)
+    ).fetchall()}
+    names = [n for n in names if n not in on_leave]
+    random.shuffle(names)
+    from datetime import datetime as _dt
+    slot_dt = _dt(date.today().year, date.today().month, date.today().day, 12, 0)
+    slots = []
+    i = 0
+    while i < len(names):
+        pair = names[i:i + 2]
+        slots.append((slot_dt.strftime('%H:%M'), pair))
+        slot_dt += timedelta(minutes=15)
+        i += 2
+    return slots
+
+
+@app.route('/manager/lunch')
+@login_required
+@manager_required
+def lunch_schedule():
+    db = get_db()
+    teams_to_schedule = TEAMS if current_user.role in ('admin', 'account_owner') else (
+        [current_user.team] if current_user.team else []
+    )
+    schedules = {}
+    for team in teams_to_schedule:
+        slots = _build_lunch_slots(db, team)
+        schedules[team] = {'slots': slots, 'has_webhook': bool(_team_webhook(db, team))}
+    return render_template('lunch_schedule.html', schedules=schedules,
+                           today=date.today().strftime('%d %b %Y'))
+
+
+@app.route('/manager/lunch/post', methods=['POST'])
+@login_required
+@manager_required
+def post_lunch_to_slack():
+    team = request.form.get('team', '')
+    if not team:
+        flash('No team specified.', 'danger')
+        return redirect(url_for('lunch_schedule'))
+    db = get_db()
+    webhook = _team_webhook(db, team)
+    if not webhook:
+        flash(f'No Slack webhook configured for {team}.', 'danger')
+        return redirect(url_for('lunch_schedule'))
+    slots = _build_lunch_slots(db, team)
+    if not slots:
+        flash(f'No one is clocked in for {team} today.', 'warning')
+        return redirect(url_for('lunch_schedule'))
+    lines = [f"*\U0001f37d️ Lunch Schedule — {team} ({date.today().strftime('%d %b %Y')})*"]
+    for time_str, names in slots:
+        lines.append(f"{time_str} — {' & '.join(names)}")
+    _post_slack(webhook, '\n'.join(lines))
+    flash(f'Lunch schedule posted to Slack for {team}.', 'success')
+    return redirect(url_for('lunch_schedule'))
 
 
 # ─── Reports ──────────────────────────────────────────────────────────────────

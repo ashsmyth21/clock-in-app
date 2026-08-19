@@ -23,6 +23,10 @@
       <li><a href="{{ url_for('manager_dashboard') }}" class="{% if request.endpoint == 'manager_dashboard' %}active{% endif %}">Dashboard</a></li>
       <li><a href="{{ url_for('agent_dashboard') }}" class="{% if request.endpoint == 'agent_dashboard' %}active{% endif %}">My Status</a></li>
       <li><a href="{{ url_for('leave_management') }}" class="{% if request.endpoint == 'leave_management' %}active{% endif %}">Leave</a></li>
+      <li><a href="{{ url_for('lunch_schedule') }}" class="{% if request.endpoint in ('lunch_schedule','post_lunch_to_slack') %}active{% endif %}">Lunch</a></li>
+      {% if current_user.role in ('admin', 'account_owner') %}
+      <li><a href="{{ url_for('slack_settings') }}" class="{% if request.endpoint == 'slack_settings' %}active{% endif %}">Slack</a></li>
+      {% endif %}
       <li><a href="{{ url_for('user_management') }}" class="{% if request.endpoint == 'user_management' %}active{% endif %}">Users</a></li>
       <li><a href="{{ url_for('reports') }}" class="{% if request.endpoint == 'reports' %}active{% endif %}">Reports</a></li>
     {% else %}

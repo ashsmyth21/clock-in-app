@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Lunch Schedule — Staff Clock-In{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Lunch Schedule</div>
+    <div class="page-sub">{{ today }} — based on who is currently clocked in</div>
+  </div>
+  <a href="{{ url_for('lunch_schedule') }}" class="btn btn-secondary">Regenerate</a>
+</div>
+
+{% set any_slots = namespace(found=false) %}
+{% for team, data in schedules.items() %}
+  {% if data.slots %}{% set any_slots.found = true %}{% endif %}
+{% endfor %}
+
+{% if not any_slots.found %}
+<div class="card">
+  <div class="empty-state">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2"/>
+      <path d="M24 16v8l5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <p>No agents are clocked in right now, or everyone is on leave.</p>
+  </div>
+</div>
+{% else %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;">
+  {% for team, data in schedules.items() %}
+  {% if data.slots %}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">{{ team }}</span>
+      {% if data.has_webhook %}
+        <form method="POST" action="{{ url_for('post_lunch_to_slack') }}" style="display:inline;">
+          <input type="hidden" name="team" value="{{ team }}">
+          <button type="submit" class="btn btn-sm btn-primary"
+                  onclick="return confirm('Post lunch schedule for {{ team }} to Slack?')">
+            Post to Slack
+          </button>
+        </form>
+      {% else %}
+        <span style="font-size:11.5px;color:var(--text-muted);">No webhook — configure in Slack settings</span>
+      {% endif %}
+    </div>
+    {% for time_str, names in data.slots %}
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;
+                border-bottom:1px solid var(--border);">
+      <span style="font-size:13px;font-weight:700;color:var(--blue);
+                   min-width:42px;font-variant-numeric:tabular-nums;">{{ time_str }}</span>
+      <span style="font-size:13.5px;">{{ names | join(' &amp; ') }}</span>
+    </div>
+    {% endfor %}
+    <div style="padding:8px 0 2px;font-size:12px;color:var(--text-muted);">
+      {{ data.slots | length }} slot{{ 's' if data.slots | length != 1 else '' }}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

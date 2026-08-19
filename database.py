@@ -86,6 +86,14 @@ def init_db():
     lr_cols = [row[1] for row in db.execute('PRAGMA table_info(leave_records)').fetchall()]
     if 'half_day' not in lr_cols:
         db.execute('ALTER TABLE leave_records ADD COLUMN half_day TEXT')
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS slack_webhooks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team TEXT NOT NULL UNIQUE,
+            webhook_url TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    ''')
     db.execute("UPDATE users SET role = 'account_owner' WHERE username = 'admin' AND role IN ('admin', 'manager')")
     existing = db.execute('SELECT id FROM users WHERE username = ?', ('admin',)).fetchone()
     if not existing:

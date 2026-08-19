@@ -965,11 +965,17 @@ def _build_lunch_slots(db, team):
     slot_dt = _dt(date.today().year, date.today().month, date.today().day, 12, 0)
     slots = []
     i = 0
+    # Support: 2 per slot / 15-min gaps when >6 in, else 1 per slot / 30-min gaps.
+    # All other teams: always 1 per slot / 30-min gaps.
+    if team == 'Support' and len(names) > 6:
+        per_slot, gap_mins = 2, 15
+    else:
+        per_slot, gap_mins = 1, 30
     while i < len(names):
-        pair = names[i:i + 2]
-        slots.append((slot_dt.strftime('%H:%M'), pair))
-        slot_dt += timedelta(minutes=15)
-        i += 2
+        batch = names[i:i + per_slot]
+        slots.append((slot_dt.strftime('%H:%M'), batch))
+        slot_dt += timedelta(minutes=gap_mins)
+        i += per_slot
     return slots
 
 

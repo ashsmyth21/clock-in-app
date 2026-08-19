@@ -64,6 +64,9 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_status_session ON status_events(session_id);
     ''')
+    s_cols = [row[1] for row in db.execute('PRAGMA table_info(sessions)').fetchall()]
+    if 'last_heartbeat' not in s_cols:
+        db.execute('ALTER TABLE sessions ADD COLUMN last_heartbeat TEXT')
     cols = [row[1] for row in db.execute('PRAGMA table_info(users)').fetchall()]
     if 'team' not in cols:
         db.execute('ALTER TABLE users ADD COLUMN team TEXT')

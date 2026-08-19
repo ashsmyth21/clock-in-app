@@ -365,6 +365,7 @@ def agent_dashboard():
     if current_user.force_password_change:
         return redirect(url_for('change_password'))
     db = get_db()
+    _auto_clockout_stale(db)
     sess = _open_session(db, current_user.id)
     current_status = None
     status_since = None
@@ -460,6 +461,38 @@ def clock_out():
     return redirect(url_for('agent_dashboard'))
 
 
+@app.route('/heartbeat', methods=['POST'])
+@login_required
+def heartbeat():
+    db = get_db()
+    sess = _open_session(db, current_user.id)
+    if sess:
+        db.execute('UPDATE sessions SET last_heartbeat = ? WHERE id = ?',
+                   (datetime.now().isoformat(), sess['id']))
+        db.commit()
+    return '', 204
+
+
+def _auto_clockout_stale(db, threshold_mins=30):
+    """Clock out sessions whose last heartbeat is older than threshold_mins."""
+    cutoff = (datetime.now() - timedelta(minutes=threshold_mins)).isoformat()
+    stale = db.execute(
+        "SELECT id, last_heartbeat, clock_in FROM sessions"
+        " WHERE clock_out IS NULL AND last_heartbeat IS NOT NULL AND last_heartbeat < ?",
+        (cutoff,)
+    ).fetchall()
+    for s in stale:
+        clock_out_time = s['last_heartbeat']
+        total = max(0, int(
+            (datetime.fromisoformat(clock_out_time) - datetime.fromisoformat(s['clock_in'])
+             ).total_seconds() / 60
+        ))
+        db.execute('UPDATE sessions SET clock_out = ?, total_minutes = ? WHERE id = ?',
+                   (clock_out_time, total, s['id']))
+    if stale:
+        db.commit()
+
+
 @app.route('/agent/auto-clock-out', methods=['POST'])
 @login_required
 def auto_clock_out():
@@ -503,6 +536,7 @@ def manager_dashboard():
     if current_user.force_password_change:
         return redirect(url_for('change_password'))
     db = get_db()
+    _auto_clockout_stale(db)
     if current_user.role in ('admin', 'account_owner'):
         agents = db.execute(
             "SELECT id, username, role, team FROM users WHERE is_active = 1 AND deleted_at IS NULL AND role NOT IN ('admin', 'account_owner') ORDER BY username"

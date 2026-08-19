@@ -228,6 +228,12 @@
   // Auto-refresh is intentional
   setTimeout(() => { safeLeave = true; location.reload(); }, 60000);
 
+  // Heartbeat — keeps session alive; absence triggers server-side auto-clock-out
+  function sendHeartbeat() { fetch('/heartbeat', { method: 'POST' }); }
+  sendHeartbeat();
+  setInterval(sendHeartbeat, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) sendHeartbeat(); });
+
   // Auto clock-out on tab/browser close — beacon persists through page unload
   window.addEventListener('beforeunload', () => {
     if (safeLeave) return;
